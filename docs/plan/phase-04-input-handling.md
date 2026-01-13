@@ -12,7 +12,7 @@
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -106,7 +106,7 @@ impl EventHandler {
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -293,7 +293,7 @@ async fn test_quit_command() {
 
 **Priority:** Critical
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -473,7 +473,7 @@ fn test_help_view_any_key_closes() {
 
 **Priority:** High
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -574,11 +574,11 @@ async fn run_app(terminal: &mut Terminal<impl Backend>, app: &mut App) -> Result
 
 Before moving to Phase 5, ensure:
 
-- [ ] All 4 stories completed
-- [ ] All keybindings work as specified
-- [ ] Navigation works (up/down/top/bottom)
-- [ ] Panel switching works (Tab)
-- [ ] Help view toggles with `?`
-- [ ] Debug view toggles with `F12`
-- [ ] Quit works with `q`
-- [ ] All unit tests pass
+- [x] All 4 stories completed
+- [x] All keybindings work as specified
+- [x] Navigation works (up/down/top/bottom)
+- [x] Panel switching works (Tab)
+- [x] Help view toggles with `?`
+- [x] Debug view toggles with `F12`
+- [x] Quit works with `q`
+- [x] All unit tests pass

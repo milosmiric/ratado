@@ -13,7 +13,7 @@ notify-rust = "4.11.7"
 ratatui = { version = "0.30.0", features = ["crossterm"] }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
 toml = "0.9.11"
 tui-logger = "0.18.0"
 turso = "0.4.3"

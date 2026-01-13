@@ -30,3 +30,4 @@ pub mod ui;
 pub mod utils;
 
 pub use app::{App, AppError, FocusPanel, InputMode, View};
+pub use handlers::{handle_event, AppEvent, Command, EventHandler};

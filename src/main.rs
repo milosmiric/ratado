@@ -3,10 +3,10 @@
 //! A terminal-based task manager built with Rust and Ratatui.
 
 use std::io;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -14,7 +14,8 @@ use log::info;
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use ratado::app::App;
-use ratado::storage::{Database, run_migrations};
+use ratado::handlers::{handle_event, EventHandler};
+use ratado::storage::{run_migrations, Database};
 use ratado::ui;
 
 /// Tick rate for the event loop (250ms for checking reminders)
@@ -90,145 +91,24 @@ async fn run_app<B: ratatui::backend::Backend>(
 where
     <B as ratatui::backend::Backend>::Error: 'static,
 {
-    let mut last_tick = Instant::now();
+    // Create event handler
+    let mut events = EventHandler::new(TICK_RATE);
 
-    while !app.should_quit {
+    loop {
         // Draw the UI
         terminal.draw(|frame| ui::draw(frame, app))?;
 
-        // Calculate timeout for event polling
-        let timeout = TICK_RATE.saturating_sub(last_tick.elapsed());
-
-        // Poll for events
-        if event::poll(timeout)? {
-            match event::read()? {
-                Event::Key(key) => {
-                    handle_key_event(app, key).await?;
-                }
-                Event::Resize(_, _) => {
-                    // Terminal will redraw on next iteration
-                }
-                _ => {}
+        // Wait for and handle the next event
+        if let Some(event) = events.next().await {
+            // handle_event returns false when the app should quit
+            if !handle_event(app, event).await? {
+                break;
             }
         }
 
-        // Handle tick
-        if last_tick.elapsed() >= TICK_RATE {
-            app.on_tick();
-            last_tick = Instant::now();
-        }
-    }
-
-    Ok(())
-}
-
-/// Handles keyboard input.
-///
-/// For now, implements basic navigation and quit commands.
-/// Full handler implementation will come in Phase 4.
-async fn handle_key_event(
-    app: &mut App,
-    key: event::KeyEvent,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use ratado::{InputMode, View, FocusPanel};
-
-    // Global keybindings (work in any mode)
-    match key.code {
-        // Quit with Ctrl+C
-        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.should_quit = true;
-            return Ok(());
-        }
-        // Toggle debug logs with F12
-        KeyCode::F(12) => {
-            app.current_view = if app.current_view == View::DebugLogs {
-                View::Main
-            } else {
-                View::DebugLogs
-            };
-            return Ok(());
-        }
-        _ => {}
-    }
-
-    // Mode-specific handling
-    match app.input_mode {
-        InputMode::Normal => {
-            match key.code {
-                // Quit
-                KeyCode::Char('q') => {
-                    app.should_quit = true;
-                }
-                // Navigation
-                KeyCode::Char('j') | KeyCode::Down => {
-                    if app.focus == FocusPanel::TaskList {
-                        app.select_next_task();
-                    } else {
-                        app.select_next_project();
-                    }
-                }
-                KeyCode::Char('k') | KeyCode::Up => {
-                    if app.focus == FocusPanel::TaskList {
-                        app.select_previous_task();
-                    } else {
-                        app.select_previous_project();
-                    }
-                }
-                // Panel switching
-                KeyCode::Char('h') | KeyCode::Left => {
-                    app.focus = FocusPanel::Sidebar;
-                }
-                KeyCode::Char('l') | KeyCode::Right => {
-                    app.focus = FocusPanel::TaskList;
-                }
-                KeyCode::Tab => {
-                    app.toggle_focus();
-                }
-                // Filter/Sort
-                KeyCode::Char('f') => {
-                    app.cycle_filter();
-                }
-                KeyCode::Char('s') => {
-                    app.cycle_sort();
-                }
-                // Help
-                KeyCode::Char('?') => {
-                    app.current_view = View::Help;
-                }
-                // Escape from help/other views
-                KeyCode::Esc => {
-                    app.current_view = View::Main;
-                }
-                _ => {}
-            }
-        }
-        InputMode::Editing | InputMode::Search => {
-            match key.code {
-                KeyCode::Esc => {
-                    app.input_mode = InputMode::Normal;
-                    app.input_buffer.clear();
-                    app.input_cursor = 0;
-                }
-                KeyCode::Char(c) => {
-                    app.input_buffer.insert(app.input_cursor, c);
-                    app.input_cursor += 1;
-                }
-                KeyCode::Backspace => {
-                    if app.input_cursor > 0 {
-                        app.input_cursor -= 1;
-                        app.input_buffer.remove(app.input_cursor);
-                    }
-                }
-                KeyCode::Left => {
-                    app.input_cursor = app.input_cursor.saturating_sub(1);
-                }
-                KeyCode::Right => {
-                    if app.input_cursor < app.input_buffer.len() {
-                        app.input_cursor += 1;
-                    }
-                }
-                _ => {}
-            }
+        // Double-check quit flag (in case command set it without returning false)
+        if app.should_quit {
+            break;
         }
     }
 
