@@ -10,6 +10,7 @@ crossterm = "0.29.0"
 directories = "6.0.0"
 log = "0.4.29"
 notify-rust = "4.11.7"
+open = "5"
 ratatui = { version = "0.30.0", features = ["crossterm"] }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"

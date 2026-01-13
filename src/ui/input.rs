@@ -130,6 +130,80 @@ impl TextInput {
         self.cursor = self.value.len();
     }
 
+    /// Moves the cursor left by one word.
+    ///
+    /// A word boundary is defined as a transition between whitespace and non-whitespace.
+    pub fn move_word_left(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let chars: Vec<char> = self.value.chars().collect();
+
+        // Skip any whitespace immediately before cursor
+        let mut pos = self.cursor;
+        while pos > 0 && chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        // Skip non-whitespace characters (the word itself)
+        while pos > 0 && !chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        self.cursor = pos;
+    }
+
+    /// Moves the cursor right by one word.
+    ///
+    /// A word boundary is defined as a transition between whitespace and non-whitespace.
+    pub fn move_word_right(&mut self) {
+        let chars: Vec<char> = self.value.chars().collect();
+        let len = chars.len();
+
+        if self.cursor >= len {
+            return;
+        }
+
+        let mut pos = self.cursor;
+
+        // Skip non-whitespace characters (current word)
+        while pos < len && !chars[pos].is_whitespace() {
+            pos += 1;
+        }
+
+        // Skip whitespace to reach next word
+        while pos < len && chars[pos].is_whitespace() {
+            pos += 1;
+        }
+
+        self.cursor = pos;
+    }
+
+    /// Deletes the word before the cursor (Option+Delete / Alt+Backspace).
+    pub fn delete_word_backward(&mut self) {
+        if self.cursor == 0 {
+            return;
+        }
+
+        let chars: Vec<char> = self.value.chars().collect();
+        let mut pos = self.cursor;
+
+        // Skip any whitespace immediately before cursor
+        while pos > 0 && chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        // Skip non-whitespace characters (the word itself)
+        while pos > 0 && !chars[pos - 1].is_whitespace() {
+            pos -= 1;
+        }
+
+        // Delete from pos to cursor
+        self.value = chars[..pos].iter().chain(chars[self.cursor..].iter()).collect();
+        self.cursor = pos;
+    }
+
     /// Renders the text input to a buffer.
     ///
     /// # Arguments
@@ -354,6 +428,61 @@ mod tests {
     fn test_clear() {
         let mut input = TextInput::with_value("Hello");
         input.clear();
+        assert_eq!(input.value(), "");
+        assert_eq!(input.cursor(), 0);
+    }
+
+    #[test]
+    fn test_move_word_left() {
+        let mut input = TextInput::with_value("Hello world test");
+        assert_eq!(input.cursor(), 16); // At end
+
+        input.move_word_left();
+        assert_eq!(input.cursor(), 12); // Before "test"
+
+        input.move_word_left();
+        assert_eq!(input.cursor(), 6); // Before "world"
+
+        input.move_word_left();
+        assert_eq!(input.cursor(), 0); // Before "Hello"
+
+        input.move_word_left();
+        assert_eq!(input.cursor(), 0); // Stay at start
+    }
+
+    #[test]
+    fn test_move_word_right() {
+        let mut input = TextInput::with_value("Hello world test");
+        input.move_home();
+        assert_eq!(input.cursor(), 0);
+
+        input.move_word_right();
+        assert_eq!(input.cursor(), 6); // After "Hello "
+
+        input.move_word_right();
+        assert_eq!(input.cursor(), 12); // After "world "
+
+        input.move_word_right();
+        assert_eq!(input.cursor(), 16); // At end
+
+        input.move_word_right();
+        assert_eq!(input.cursor(), 16); // Stay at end
+    }
+
+    #[test]
+    fn test_delete_word_backward() {
+        let mut input = TextInput::with_value("Hello world test");
+        assert_eq!(input.cursor(), 16); // At end
+
+        input.delete_word_backward();
+        assert_eq!(input.value(), "Hello world ");
+        assert_eq!(input.cursor(), 12);
+
+        input.delete_word_backward();
+        assert_eq!(input.value(), "Hello ");
+        assert_eq!(input.cursor(), 6);
+
+        input.delete_word_backward();
         assert_eq!(input.value(), "");
         assert_eq!(input.cursor(), 0);
     }

@@ -16,9 +16,11 @@
 //! - [`input`] - Text input widget
 //! - [`tag_input`] - Tag input widget with autocomplete
 //! - [`date_picker`] - Calendar date picker widget
+//! - [`description_textarea`] - Multi-line textarea with link support
 
 pub mod date_picker;
 mod debug;
+pub mod description_textarea;
 pub mod dialogs;
 mod header;
 mod help;

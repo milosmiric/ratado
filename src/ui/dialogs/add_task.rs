@@ -1,8 +1,8 @@
 //! Add/Edit task dialog.
 //!
 //! This dialog handles both creating new tasks and editing existing ones.
-//! Includes calendar picker integration for date selection and tag input
-//! with autocomplete.
+//! Includes calendar picker integration for date selection, tag input
+//! with autocomplete, and a multi-line description with clickable links.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -16,6 +16,7 @@ use ratatui::{
 use crate::models::{Priority, Task};
 use crate::storage::Tag;
 use crate::ui::date_picker::{DatePicker, DatePickerAction};
+use crate::ui::description_textarea::{DescriptionTextArea, TextAreaAction};
 use crate::ui::dialogs::{centered_rect, DialogAction};
 use crate::ui::input::TextInput;
 use crate::ui::tag_input::TagInput;
@@ -63,8 +64,8 @@ impl AddTaskField {
 pub struct AddTaskDialog {
     /// Title input field
     pub title: TextInput,
-    /// Description input field
-    pub description: TextInput,
+    /// Description textarea (multi-line with link support)
+    pub description: DescriptionTextArea,
     /// Due date as text (parsed on submit)
     pub due_date: TextInput,
     /// Selected priority
@@ -83,6 +84,8 @@ pub struct AddTaskDialog {
     dialog_title: String,
     /// Calendar picker (shown when user presses 'c' on due date field)
     date_picker: Option<DatePicker>,
+    /// Status message to show (e.g., "Link opened")
+    pub status_message: Option<String>,
 }
 
 impl AddTaskDialog {
@@ -90,7 +93,7 @@ impl AddTaskDialog {
     pub fn new() -> Self {
         Self {
             title: TextInput::new().with_placeholder("Task title..."),
-            description: TextInput::new().with_placeholder("Description (optional)"),
+            description: DescriptionTextArea::new(),
             due_date: TextInput::new().with_placeholder("today, +1d, mon, c=calendar"),
             priority: Priority::Medium,
             project_id: None,
@@ -100,6 +103,7 @@ impl AddTaskDialog {
             editing_task_id: None,
             dialog_title: "Add Task".to_string(),
             date_picker: None,
+            status_message: None,
         }
     }
 
@@ -112,7 +116,7 @@ impl AddTaskDialog {
 
         Self {
             title: TextInput::with_value(&task.title),
-            description: TextInput::with_value(task.description.as_deref().unwrap_or("")),
+            description: DescriptionTextArea::with_text(task.description.as_deref().unwrap_or("")),
             due_date: TextInput::with_value(due_date_str),
             priority: task.priority,
             project_id: task.project_id.clone(),
@@ -122,6 +126,7 @@ impl AddTaskDialog {
             editing_task_id: Some(task.id.clone()),
             dialog_title: "Edit Task".to_string(),
             date_picker: None,
+            status_message: None,
         }
     }
 
@@ -188,9 +193,7 @@ impl AddTaskDialog {
             _ => {
                 match self.focused_field {
                     AddTaskField::Title => self.handle_text_input(&mut self.title.clone(), key),
-                    AddTaskField::Description => {
-                        self.handle_text_input(&mut self.description.clone(), key)
-                    }
+                    AddTaskField::Description => self.handle_description_input(key),
                     AddTaskField::DueDate => self.handle_due_date_input(key),
                     AddTaskField::Priority => self.handle_priority_input(key),
                     AddTaskField::Tags => self.handle_tags_input(key),
@@ -199,6 +202,30 @@ impl AddTaskDialog {
                         DialogAction::None
                     }
                 }
+            }
+        }
+    }
+
+    /// Handles input for the description field (multi-line textarea with link support).
+    fn handle_description_input(&mut self, key: KeyEvent) -> DialogAction {
+        match self.description.handle_key(key) {
+            TextAreaAction::None => DialogAction::None,
+            TextAreaAction::OpenLink(url) => {
+                // Open the link in the default browser
+                if open::that(&url).is_ok() {
+                    self.status_message = Some(format!("Opened: {}", url));
+                } else {
+                    self.status_message = Some("Failed to open link".to_string());
+                }
+                DialogAction::None
+            }
+            TextAreaAction::NextField => {
+                self.focused_field = self.focused_field.next();
+                DialogAction::None
+            }
+            TextAreaAction::PrevField => {
+                self.focused_field = self.focused_field.prev();
+                DialogAction::None
             }
         }
     }
@@ -262,15 +289,22 @@ impl AddTaskDialog {
     fn handle_text_input(&mut self, _input: &mut TextInput, key: KeyEvent) -> DialogAction {
         let input = match self.focused_field {
             AddTaskField::Title => &mut self.title,
-            AddTaskField::Description => &mut self.description,
             AddTaskField::DueDate => &mut self.due_date,
             _ => return DialogAction::None,
         };
 
         match key.code {
+            // Word navigation (Emacs-style Alt+b/Alt+f for macOS Option+Arrow)
+            KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::ALT) => input.move_word_left(),
+            KeyCode::Char('f') if key.modifiers.contains(KeyModifiers::ALT) => input.move_word_right(),
             KeyCode::Char(c) => input.insert(c),
+            // Word deletion (Alt+Backspace)
+            KeyCode::Backspace if key.modifiers.contains(KeyModifiers::ALT) => input.delete_word_backward(),
             KeyCode::Backspace => input.delete_backward(),
             KeyCode::Delete => input.delete_forward(),
+            // Word navigation (Alt+Arrow)
+            KeyCode::Left if key.modifiers.contains(KeyModifiers::ALT) => input.move_word_left(),
+            KeyCode::Right if key.modifiers.contains(KeyModifiers::ALT) => input.move_word_right(),
             KeyCode::Left => input.move_left(),
             KeyCode::Right => input.move_right(),
             KeyCode::Home => input.move_home(),
@@ -326,7 +360,8 @@ impl AddTaskDialog {
         };
 
         // Set description
-        let desc = self.description.value().trim();
+        let desc = self.description.text();
+        let desc = desc.trim();
         task.description = if desc.is_empty() {
             None
         } else {
@@ -352,9 +387,9 @@ impl AddTaskDialog {
     pub fn render(&self, frame: &mut Frame) {
         let area = frame.area();
 
-        // Dialog dimensions
+        // Dialog dimensions - increased height for textarea
         let dialog_width = 60.min(area.width.saturating_sub(4));
-        let dialog_height = 19.min(area.height.saturating_sub(4)); // Increased for tags field
+        let dialog_height = 28.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
         // Render background dim effect
@@ -374,13 +409,13 @@ impl AddTaskDialog {
 
         // Layout the fields
         let chunks = Layout::vertical([
-            Constraint::Length(3), // Title
-            Constraint::Length(3), // Description
-            Constraint::Length(3), // Due date
-            Constraint::Length(3), // Priority
-            Constraint::Length(3), // Tags
-            Constraint::Length(1), // Spacer
-            Constraint::Length(1), // Submit button
+            Constraint::Length(3),  // Title
+            Constraint::Length(10), // Description (textarea - 8 rows + border)
+            Constraint::Length(3),  // Due date
+            Constraint::Length(3),  // Priority
+            Constraint::Length(3),  // Tags
+            Constraint::Length(1),  // Status message
+            Constraint::Length(1),  // Submit button
         ])
         .split(inner);
 
@@ -393,14 +428,8 @@ impl AddTaskDialog {
             self.focused_field == AddTaskField::Title,
         );
 
-        // Render description field
-        self.render_text_field(
-            frame,
-            chunks[1],
-            "Description",
-            &self.description,
-            self.focused_field == AddTaskField::Description,
-        );
+        // Render description textarea
+        self.render_description_field(frame, chunks[1], self.focused_field == AddTaskField::Description);
 
         // Render due date field
         self.render_text_field(
@@ -417,6 +446,13 @@ impl AddTaskDialog {
         // Render tags field
         self.render_tags_field(frame, chunks[4], self.focused_field == AddTaskField::Tags);
 
+        // Render status message if any
+        if let Some(ref msg) = self.status_message {
+            let status = Paragraph::new(msg.as_str())
+                .style(Style::default().fg(Color::Green));
+            frame.render_widget(status, chunks[5]);
+        }
+
         // Render submit button
         self.render_submit_button(frame, chunks[6], self.focused_field == AddTaskField::Submit);
 
@@ -424,6 +460,12 @@ impl AddTaskDialog {
         if let Some(ref picker) = self.date_picker {
             picker.render(frame);
         }
+    }
+
+    /// Renders the description textarea.
+    fn render_description_field(&self, frame: &mut Frame, area: Rect, focused: bool) {
+        let buf = frame.buffer_mut();
+        self.description.render(area, buf, focused, Some("Description (Ctrl+O to open link)"));
     }
 
     /// Renders a text input field.
@@ -666,7 +708,7 @@ mod tests {
 
         let dialog = AddTaskDialog::from_task(&task);
         assert_eq!(dialog.title.value(), "Test Task");
-        assert_eq!(dialog.description.value(), "A description");
+        assert_eq!(dialog.description.text(), "A description");
         assert_eq!(dialog.priority, Priority::High);
         assert!(dialog.is_editing());
     }
