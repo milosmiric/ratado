@@ -32,9 +32,9 @@
 use log::debug;
 use tui_logger::TuiWidgetEvent;
 
-use crate::app::{App, AppError, FocusPanel, InputMode, View};
+use crate::app::{App, AppError, FocusPanel, InputMode, SidebarSection, View};
 use crate::models::{Filter, Priority};
-use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, Dialog, FilterSortDialog};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, ProjectDialog};
 
 /// All possible commands that can be executed in the application.
 ///
@@ -62,6 +62,8 @@ pub enum Command {
     FocusSidebar,
     /// Focus the task list panel
     FocusTaskList,
+    /// Toggle between projects and tags sections in sidebar
+    ToggleSidebarSection,
 
     // === Task Actions ===
     /// Start adding a new task
@@ -78,6 +80,12 @@ pub enum Command {
     MoveToProject,
     /// Edit tags on the selected task
     EditTags,
+    /// Create a new project
+    AddProject,
+    /// Edit the selected project
+    EditProject,
+    /// Delete the selected project
+    DeleteProject,
 
     // === Views ===
     /// Show the main task list view
@@ -211,7 +219,10 @@ impl Command {
             Command::NavigateUp => {
                 match app.focus {
                     FocusPanel::TaskList => app.select_previous_task(),
-                    FocusPanel::Sidebar => app.select_previous_project(),
+                    FocusPanel::Sidebar => match app.sidebar_section {
+                        SidebarSection::Projects => app.select_previous_project(),
+                        SidebarSection::Tags => app.select_previous_tag(),
+                    },
                 }
                 Ok(true)
             }
@@ -219,7 +230,10 @@ impl Command {
             Command::NavigateDown => {
                 match app.focus {
                     FocusPanel::TaskList => app.select_next_task(),
-                    FocusPanel::Sidebar => app.select_next_project(),
+                    FocusPanel::Sidebar => match app.sidebar_section {
+                        SidebarSection::Projects => app.select_next_project(),
+                        SidebarSection::Tags => app.select_next_tag(),
+                    },
                 }
                 Ok(true)
             }
@@ -288,18 +302,31 @@ impl Command {
                 Ok(true)
             }
 
+            Command::ToggleSidebarSection => {
+                app.toggle_sidebar_section();
+                Ok(true)
+            }
+
             // === Task Actions ===
             Command::AddTask => {
-                // Open the add task dialog
-                app.dialog = Some(Dialog::AddTask(AddTaskDialog::new()));
+                // Open the add task dialog with available tags for autocomplete
+                let mut dialog = AddTaskDialog::new().with_available_tags(app.tags.clone());
+
+                // Set the project to the currently selected project (if not "All Tasks")
+                if let Some(project) = app.selected_project() {
+                    dialog.project_id = Some(project.id.clone());
+                }
+
+                app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
                 app.set_status("Tab between fields, Ctrl+Enter to save");
                 Ok(true)
             }
 
             Command::EditTask => {
                 if let Some(task) = app.selected_task().cloned() {
-                    // Open the add task dialog in edit mode
-                    app.dialog = Some(Dialog::AddTask(AddTaskDialog::from_task(&task)));
+                    // Open the add task dialog in edit mode with available tags
+                    let dialog = AddTaskDialog::from_task(&task).with_available_tags(app.tags.clone());
+                    app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
                     app.set_status("Tab between fields, Ctrl+Enter to save");
                 }
                 Ok(true)
@@ -352,8 +379,54 @@ impl Command {
             }
 
             Command::EditTags => {
-                // TODO: Implement tag editor modal
-                app.set_status("Edit tags: Not yet implemented");
+                // Edit tags by opening the task dialog focused on tags field
+                if let Some(task) = app.selected_task().cloned() {
+                    let dialog = AddTaskDialog::from_task(&task).with_available_tags(app.tags.clone());
+                    app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
+                    app.set_status("Tab to Tags field, Enter to add tags");
+                }
+                Ok(true)
+            }
+
+            Command::AddProject => {
+                app.dialog = Some(Dialog::Project(ProjectDialog::new()));
+                app.set_status("Enter project name, Tab to navigate");
+                Ok(true)
+            }
+
+            Command::EditProject => {
+                // Edit the currently selected project (not "All Tasks")
+                if app.selected_project_index > 0 {
+                    if let Some(project) = app.selected_project().cloned() {
+                        app.dialog = Some(Dialog::Project(ProjectDialog::from_project(&project)));
+                        app.set_status("Edit project, Tab to navigate");
+                    }
+                } else {
+                    app.set_status("Select a project to edit (not 'All Tasks')");
+                }
+                Ok(true)
+            }
+
+            Command::DeleteProject => {
+                // Delete the currently selected project (not "All Tasks" or "Inbox")
+                if app.selected_project_index > 0 {
+                    if let Some(project) = app.selected_project().cloned() {
+                        if project.id == "inbox" {
+                            app.set_status("Cannot delete the Inbox project");
+                        } else {
+                            let task_count = app.task_count_for_project(&project.id);
+                            app.dialog = Some(Dialog::DeleteProject(
+                                DeleteProjectDialog::new(
+                                    project.id,
+                                    project.name,
+                                    task_count,
+                                ),
+                            ));
+                        }
+                    }
+                } else {
+                    app.set_status("Select a project to delete");
+                }
                 Ok(true)
             }
 

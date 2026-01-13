@@ -6,6 +6,9 @@
 
 use chrono::{DateTime, Duration, Local, Utc};
 
+#[cfg(test)]
+use chrono::TimeZone;
+
 /// Formats a date relative to today.
 ///
 /// Returns a human-readable string like "Today", "Tomorrow", "Yesterday",
@@ -99,11 +102,12 @@ pub fn format_due_date(date: Option<DateTime<Utc>>) -> String {
 ///
 /// ```
 /// use ratado::utils::is_same_day;
-/// use chrono::{Utc, Duration};
+/// use chrono::{Utc, Duration, TimeZone};
 ///
-/// let now = Utc::now();
-/// let later_today = now + Duration::hours(1);
-/// assert!(is_same_day(now, later_today));
+/// // Use a fixed time to avoid test failures at day boundaries
+/// let base = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+/// let same_day = base + Duration::hours(1);
+/// assert!(is_same_day(base, same_day));
 /// ```
 pub fn is_same_day(a: DateTime<Utc>, b: DateTime<Utc>) -> bool {
     let a_local = a.with_timezone(&Local).date_naive();
@@ -251,12 +255,13 @@ mod tests {
 
     #[test]
     fn test_is_same_day() {
-        let now = Utc::now();
-        let also_now = now + Duration::hours(1);
-        let tomorrow = now + Duration::days(1);
+        // Use a fixed time to avoid flaky tests at day boundaries
+        let base = Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap();
+        let same_day = base + Duration::hours(1);
+        let next_day = base + Duration::days(1);
 
-        assert!(is_same_day(now, also_now));
-        assert!(!is_same_day(now, tomorrow));
+        assert!(is_same_day(base, same_day));
+        assert!(!is_same_day(base, next_day));
     }
 
     #[test]

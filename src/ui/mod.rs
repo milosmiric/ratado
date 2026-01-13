@@ -14,6 +14,7 @@
 //! - [`debug`] - Debug log viewer
 //! - [`dialogs`] - Modal dialogs for task operations
 //! - [`input`] - Text input widget
+//! - [`tag_input`] - Tag input widget with autocomplete
 //! - [`date_picker`] - Calendar date picker widget
 
 pub mod date_picker;
@@ -25,6 +26,7 @@ pub mod input;
 mod layout;
 mod sidebar;
 mod status_bar;
+pub mod tag_input;
 pub mod task_list;
 
 use ratatui::Frame;

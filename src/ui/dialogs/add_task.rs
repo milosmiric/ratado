@@ -1,7 +1,8 @@
 //! Add/Edit task dialog.
 //!
 //! This dialog handles both creating new tasks and editing existing ones.
-//! Includes calendar picker integration for date selection.
+//! Includes calendar picker integration for date selection and tag input
+//! with autocomplete.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -13,9 +14,11 @@ use ratatui::{
 };
 
 use crate::models::{Priority, Task};
+use crate::storage::Tag;
 use crate::ui::date_picker::{DatePicker, DatePickerAction};
 use crate::ui::dialogs::{centered_rect, DialogAction};
 use crate::ui::input::TextInput;
+use crate::ui::tag_input::TagInput;
 
 /// The currently focused field in the dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -25,6 +28,7 @@ pub enum AddTaskField {
     Description,
     DueDate,
     Priority,
+    Tags,
     Submit,
 }
 
@@ -35,7 +39,8 @@ impl AddTaskField {
             Self::Title => Self::Description,
             Self::Description => Self::DueDate,
             Self::DueDate => Self::Priority,
-            Self::Priority => Self::Submit,
+            Self::Priority => Self::Tags,
+            Self::Tags => Self::Submit,
             Self::Submit => Self::Title,
         }
     }
@@ -47,7 +52,8 @@ impl AddTaskField {
             Self::Description => Self::Title,
             Self::DueDate => Self::Description,
             Self::Priority => Self::DueDate,
-            Self::Submit => Self::Priority,
+            Self::Tags => Self::Priority,
+            Self::Submit => Self::Tags,
         }
     }
 }
@@ -65,6 +71,10 @@ pub struct AddTaskDialog {
     pub priority: Priority,
     /// Project ID to assign
     pub project_id: Option<String>,
+    /// Tag input field
+    pub tags: TagInput,
+    /// All available tags for autocomplete
+    all_tags: Vec<Tag>,
     /// Currently focused field
     pub focused_field: AddTaskField,
     /// ID of task being edited (None for new task)
@@ -84,6 +94,8 @@ impl AddTaskDialog {
             due_date: TextInput::new().with_placeholder("today, +1d, mon, c=calendar"),
             priority: Priority::Medium,
             project_id: None,
+            tags: TagInput::new(),
+            all_tags: Vec::new(),
             focused_field: AddTaskField::Title,
             editing_task_id: None,
             dialog_title: "Add Task".to_string(),
@@ -104,11 +116,19 @@ impl AddTaskDialog {
             due_date: TextInput::with_value(due_date_str),
             priority: task.priority,
             project_id: task.project_id.clone(),
+            tags: TagInput::with_tags(task.tags.clone()),
+            all_tags: Vec::new(),
             focused_field: AddTaskField::Title,
             editing_task_id: Some(task.id.clone()),
             dialog_title: "Edit Task".to_string(),
             date_picker: None,
         }
+    }
+
+    /// Sets the available tags for autocomplete.
+    pub fn with_available_tags(mut self, tags: Vec<Tag>) -> Self {
+        self.all_tags = tags;
+        self
     }
 
     /// Returns whether this is editing an existing task.
@@ -147,10 +167,17 @@ impl AddTaskDialog {
             KeyCode::Enter if self.focused_field == AddTaskField::Submit => DialogAction::Submit,
             KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => DialogAction::Submit,
 
-            // Tab navigation
+            // Tab navigation - but check if TagInput wants to handle it first
             KeyCode::Tab => {
-                self.focused_field = self.focused_field.next();
-                DialogAction::None
+                // If on Tags field with suggestions, let TagInput accept the suggestion
+                if self.focused_field == AddTaskField::Tags && self.tags.selected_suggestion().is_some() {
+                    let all_tags = self.all_tags.clone();
+                    self.tags.handle_key(key, &all_tags);
+                    DialogAction::None
+                } else {
+                    self.focused_field = self.focused_field.next();
+                    DialogAction::None
+                }
             }
             KeyCode::BackTab => {
                 self.focused_field = self.focused_field.prev();
@@ -166,6 +193,7 @@ impl AddTaskDialog {
                     }
                     AddTaskField::DueDate => self.handle_due_date_input(key),
                     AddTaskField::Priority => self.handle_priority_input(key),
+                    AddTaskField::Tags => self.handle_tags_input(key),
                     AddTaskField::Submit => {
                         // Enter handled above, other keys do nothing
                         DialogAction::None
@@ -173,6 +201,14 @@ impl AddTaskDialog {
                 }
             }
         }
+    }
+
+    /// Handles input for the tags field.
+    fn handle_tags_input(&mut self, key: KeyEvent) -> DialogAction {
+        // Let the tag input handle the key
+        let all_tags = self.all_tags.clone();
+        self.tags.handle_key(key, &all_tags);
+        DialogAction::None
     }
 
     /// Handles input for the due date field, including calendar picker trigger.
@@ -306,6 +342,9 @@ impl AddTaskDialog {
         // Set project
         task.project_id = self.project_id.clone();
 
+        // Set tags
+        task.tags = self.tags.tags_vec();
+
         Some(task)
     }
 
@@ -315,7 +354,7 @@ impl AddTaskDialog {
 
         // Dialog dimensions
         let dialog_width = 60.min(area.width.saturating_sub(4));
-        let dialog_height = 16.min(area.height.saturating_sub(4));
+        let dialog_height = 19.min(area.height.saturating_sub(4)); // Increased for tags field
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
         // Render background dim effect
@@ -339,6 +378,7 @@ impl AddTaskDialog {
             Constraint::Length(3), // Description
             Constraint::Length(3), // Due date
             Constraint::Length(3), // Priority
+            Constraint::Length(3), // Tags
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Submit button
         ])
@@ -374,8 +414,11 @@ impl AddTaskDialog {
         // Render priority selector
         self.render_priority_selector(frame, chunks[3], self.focused_field == AddTaskField::Priority);
 
+        // Render tags field
+        self.render_tags_field(frame, chunks[4], self.focused_field == AddTaskField::Tags);
+
         // Render submit button
-        self.render_submit_button(frame, chunks[5], self.focused_field == AddTaskField::Submit);
+        self.render_submit_button(frame, chunks[6], self.focused_field == AddTaskField::Submit);
 
         // Render date picker on top if active
         if let Some(ref picker) = self.date_picker {
@@ -394,6 +437,17 @@ impl AddTaskDialog {
     ) {
         let buf = frame.buffer_mut();
         input.render_to_buffer(area, buf, focused, Some(label));
+    }
+
+    /// Renders the tags input field.
+    fn render_tags_field(&self, frame: &mut Frame, area: Rect, focused: bool) {
+        let buf = frame.buffer_mut();
+        self.tags.render_to_buffer(area, buf, focused, Some("Tags"));
+
+        // Render autocomplete suggestions if focused and there are suggestions
+        if focused {
+            self.tags.render_suggestions(frame, area);
+        }
     }
 
     /// Renders the priority selector.
@@ -519,18 +573,15 @@ fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     }
 
     // Relative days: +1d, +3d, +1w, +2w, etc.
-    if input.starts_with('+') {
-        let rest = &input[1..];
-        if let Some(days_str) = rest.strip_suffix('d') {
-            if let Ok(days) = days_str.parse::<i64>() {
+    if let Some(rest) = input.strip_prefix('+') {
+        if let Some(days_str) = rest.strip_suffix('d')
+            && let Ok(days) = days_str.parse::<i64>() {
                 return Some(to_datetime(today + Duration::days(days)));
             }
-        }
-        if let Some(weeks_str) = rest.strip_suffix('w') {
-            if let Ok(weeks) = weeks_str.parse::<i64>() {
+        if let Some(weeks_str) = rest.strip_suffix('w')
+            && let Ok(weeks) = weeks_str.parse::<i64>() {
                 return Some(to_datetime(today + Duration::weeks(weeks)));
             }
-        }
     }
 
     // Weekday names: mon, tue, wed, thu, fri, sat, sun
@@ -579,10 +630,10 @@ fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     // Try parsing as DD/MM (assume current year) - European format
     if input.contains('/') {
         let parts: Vec<&str> = input.split('/').collect();
-        if parts.len() == 2 {
-            if let (Ok(day), Ok(month)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
-                if day <= 31 && month <= 12 {
-                    if let Some(date) = NaiveDate::from_ymd_opt(today.year(), month, day) {
+        if parts.len() == 2
+            && let (Ok(day), Ok(month)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>())
+                && day <= 31 && month <= 12
+                    && let Some(date) = NaiveDate::from_ymd_opt(today.year(), month, day) {
                         let date = if date < today {
                             NaiveDate::from_ymd_opt(today.year() + 1, month, day).unwrap_or(date)
                         } else {
@@ -590,9 +641,6 @@ fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
                         };
                         return Some(to_datetime(date));
                     }
-                }
-            }
-        }
     }
 
     None

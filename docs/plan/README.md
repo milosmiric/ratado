@@ -56,7 +56,7 @@ Update this section as phases are completed:
 - [x] Phase 3: Core UI
 - [x] Phase 4: Input Handling
 - [x] Phase 5: Task Operations (MVP Complete!)
-- [ ] Phase 6: Projects & Tags
+- [x] Phase 6: Projects & Tags
 - [ ] Phase 7: Filtering & Search
 - [ ] Phase 8: Additional Views
 - [ ] Phase 9: Notifications

@@ -109,7 +109,7 @@ fn render_task_row(task: &Task, selected: bool, focused: bool, width: u16) -> Li
         Priority::Urgent => "!!",
         Priority::High => " !",
         Priority::Medium => "  ",
-        Priority::Low => "  ",
+        Priority::Low => " ↓",
     };
 
     // Priority color
@@ -126,9 +126,12 @@ fn render_task_row(task: &Task, selected: bool, focused: bool, width: u16) -> Li
         .map(format_relative_date)
         .unwrap_or_default();
 
+    // Format tags string
+    let tags_str = render_tags(&task.tags, 20);
+
     // Calculate available width for title
-    // Format: "  [ ] !! Title...                  Due Date"
-    let fixed_width = 3 + 3 + 3 + 2 + due_str.len() + 2; // spaces + checkbox + priority + spacing + due
+    // Format: "  [ ] !! Title...  #tags  Due Date"
+    let fixed_width = 3 + 3 + 3 + tags_str.len() + 2 + due_str.len() + 2;
     let title_width = (width as usize).saturating_sub(fixed_width).max(10);
 
     // Truncate title if needed
@@ -161,14 +164,42 @@ fn render_task_row(task: &Task, selected: bool, focused: bool, width: u16) -> Li
     };
 
     // Build the line with spans
-    let spans = vec![
+    let mut spans = vec![
         Span::styled(format!("  {} ", checkbox), row_style),
         Span::styled(format!("{} ", priority), priority_style),
         Span::styled(format!("{:<width$}", title, width = title_width), row_style),
-        Span::styled(format!("  {}", due_str), row_style.fg(Color::DarkGray)),
     ];
 
+    // Add tags if present
+    if !tags_str.is_empty() {
+        spans.push(Span::styled(
+            format!(" {}", tags_str),
+            Style::default().fg(Color::Magenta),
+        ));
+    }
+
+    spans.push(Span::styled(format!("  {}", due_str), row_style.fg(Color::DarkGray)));
+
     ListItem::new(Line::from(spans))
+}
+
+/// Renders tags as a formatted string.
+fn render_tags(tags: &[String], max_width: usize) -> String {
+    if tags.is_empty() {
+        return String::new();
+    }
+
+    let tag_str: String = tags
+        .iter()
+        .map(|t| format!("#{}", t))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if tag_str.len() > max_width {
+        format!("{}...", &tag_str[..max_width.saturating_sub(3)])
+    } else {
+        tag_str
+    }
 }
 
 #[cfg(test)]

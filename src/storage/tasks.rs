@@ -188,6 +188,50 @@ impl Database {
         Ok(rows_affected > 0)
     }
 
+    /// Deletes all tasks belonging to a project.
+    ///
+    /// # Arguments
+    ///
+    /// * `project_id` - The ID of the project whose tasks should be deleted
+    ///
+    /// # Returns
+    ///
+    /// The number of tasks deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the delete fails.
+    pub async fn delete_tasks_by_project(&self, project_id: &str) -> Result<usize> {
+        // Tags are deleted automatically via ON DELETE CASCADE
+        let rows_affected = self
+            .execute("DELETE FROM tasks WHERE project_id = ?1", [project_id])
+            .await?;
+        Ok(rows_affected as usize)
+    }
+
+    /// Moves all tasks from a project to Inbox.
+    ///
+    /// # Arguments
+    ///
+    /// * `project_id` - The ID of the project whose tasks should be moved
+    ///
+    /// # Returns
+    ///
+    /// The number of tasks moved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the update fails.
+    pub async fn move_tasks_to_inbox(&self, project_id: &str) -> Result<usize> {
+        let rows_affected = self
+            .execute(
+                "UPDATE tasks SET project_id = 'inbox', updated_at = ?1 WHERE project_id = ?2",
+                [Value::Text(chrono::Utc::now().to_rfc3339()), Value::Text(project_id.to_string())],
+            )
+            .await?;
+        Ok(rows_affected as usize)
+    }
+
     /// Queries tasks with filtering and sorting.
     ///
     /// # Arguments

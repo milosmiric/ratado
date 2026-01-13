@@ -7,7 +7,9 @@
 //!
 //! - [`AddTaskDialog`] - Create or edit a task
 //! - [`ConfirmDialog`] - Yes/No confirmation prompts
+//! - [`DeleteProjectDialog`] - Project deletion with task handling options
 //! - [`FilterSortDialog`] - Filter and sort selection
+//! - [`ProjectDialog`] - Create or edit a project
 //!
 //! ## Usage
 //!
@@ -17,11 +19,15 @@
 
 mod add_task;
 mod confirm;
+mod delete_project;
 mod filter_sort;
+mod project;
 
 pub use add_task::AddTaskDialog;
 pub use confirm::ConfirmDialog;
+pub use delete_project::{DeleteProjectChoice, DeleteProjectDialog};
 pub use filter_sort::FilterSortDialog;
+pub use project::ProjectDialog;
 
 use ratatui::{
     buffer::Buffer,
@@ -45,12 +51,16 @@ pub enum DialogAction {
 /// All dialog types in the application.
 #[derive(Debug)]
 pub enum Dialog {
-    /// Add or edit task dialog
-    AddTask(AddTaskDialog),
+    /// Add or edit task dialog (boxed due to large size)
+    AddTask(Box<AddTaskDialog>),
     /// Confirmation dialog (for delete, etc.)
     Confirm(ConfirmDialog),
+    /// Delete project dialog with task handling options
+    DeleteProject(DeleteProjectDialog),
     /// Filter and sort selection dialog
     FilterSort(FilterSortDialog),
+    /// Add or edit project dialog
+    Project(ProjectDialog),
 }
 
 impl Dialog {
@@ -59,7 +69,9 @@ impl Dialog {
         match self {
             Dialog::AddTask(dialog) => dialog.render(frame),
             Dialog::Confirm(dialog) => dialog.render(frame),
+            Dialog::DeleteProject(dialog) => dialog.render(frame),
             Dialog::FilterSort(dialog) => dialog.render(frame),
+            Dialog::Project(dialog) => dialog.render(frame),
         }
     }
 }

@@ -10,7 +10,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, InputMode};
+use crate::app::{App, FocusPanel, InputMode, SidebarSection};
 
 /// Renders the status bar.
 pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
@@ -36,16 +36,54 @@ fn render_normal_mode_hints(app: &App) -> Line<'static> {
         ]);
     }
 
-    // Default keybinding hints
+    // Context-sensitive hints based on focus
+    match app.focus {
+        FocusPanel::Sidebar => render_sidebar_hints(app),
+        FocusPanel::TaskList => render_tasklist_hints(),
+    }
+}
+
+/// Renders hints when sidebar is focused.
+fn render_sidebar_hints(app: &App) -> Line<'static> {
+    match app.sidebar_section {
+        SidebarSection::Projects => Line::from(vec![
+            Span::styled(" a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" New  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("e", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Edit  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("d", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Delete  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Tags  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("l", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Tasks  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Help", Style::default().fg(Color::DarkGray)),
+        ]),
+        SidebarSection::Tags => Line::from(vec![
+            Span::styled(" j/k", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Navigate  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Projects  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("l", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Tasks  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" Help", Style::default().fg(Color::DarkGray)),
+        ]),
+    }
+}
+
+/// Renders hints when task list is focused.
+fn render_tasklist_hints() -> Line<'static> {
     Line::from(vec![
-        Span::styled(" q", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Quit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("j/k", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Navigate  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Add  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("e", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" Edit  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Space", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" Done  ", Style::default().fg(Color::DarkGray)),
         Span::styled("f", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Filter/Sort  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Filter  ", Style::default().fg(Color::DarkGray)),
         Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Help", Style::default().fg(Color::DarkGray)),
     ])

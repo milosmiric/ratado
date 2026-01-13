@@ -55,22 +55,22 @@ impl DatePicker {
         match key.code {
             // Navigation
             KeyCode::Left | KeyCode::Char('h') => {
-                self.selected = self.selected - Duration::days(1);
+                self.selected -= Duration::days(1);
                 self.ensure_view_contains_selected();
                 DatePickerAction::None
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                self.selected = self.selected + Duration::days(1);
+                self.selected += Duration::days(1);
                 self.ensure_view_contains_selected();
                 DatePickerAction::None
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                self.selected = self.selected - Duration::days(7);
+                self.selected -= Duration::days(7);
                 self.ensure_view_contains_selected();
                 DatePickerAction::None
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.selected = self.selected + Duration::days(7);
+                self.selected += Duration::days(7);
                 self.ensure_view_contains_selected();
                 DatePickerAction::None
             }

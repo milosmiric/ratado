@@ -176,10 +176,26 @@ impl SortOrder {
     pub fn apply(&self, tasks: &mut [&Task]) {
         match self {
             SortOrder::DueDateAsc => {
-                tasks.sort_by(|a, b| a.due_date.cmp(&b.due_date));
+                // Tasks with due dates first (earliest first), then tasks without (by created date)
+                tasks.sort_by(|a, b| {
+                    match (&a.due_date, &b.due_date) {
+                        (Some(a_due), Some(b_due)) => a_due.cmp(b_due),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => a.created_at.cmp(&b.created_at),
+                    }
+                });
             }
             SortOrder::DueDateDesc => {
-                tasks.sort_by(|a, b| b.due_date.cmp(&a.due_date));
+                // Tasks with due dates first (latest first), then tasks without (by created date desc)
+                tasks.sort_by(|a, b| {
+                    match (&a.due_date, &b.due_date) {
+                        (Some(a_due), Some(b_due)) => b_due.cmp(a_due),
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (None, None) => b.created_at.cmp(&a.created_at),
+                    }
+                });
             }
             SortOrder::PriorityDesc => {
                 tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
@@ -286,5 +302,27 @@ mod tests {
         assert_eq!(refs[0].title, "Apple");
         assert_eq!(refs[1].title, "Mango");
         assert_eq!(refs[2].title, "Zebra");
+    }
+
+    #[test]
+    fn test_sort_due_date_with_none() {
+        // Tasks with due dates should come first, then tasks without
+        let mut task_with_due = Task::new("Has due date");
+        task_with_due.due_date = Some(Utc::now() + Duration::days(1));
+
+        let task_no_due_1 = Task::new("No due date 1");
+        // Small delay to ensure different created_at
+        let mut task_no_due_2 = Task::new("No due date 2");
+        task_no_due_2.created_at = Utc::now() + Duration::seconds(1);
+
+        let tasks = vec![task_no_due_1, task_with_due, task_no_due_2];
+        let mut refs: Vec<&Task> = tasks.iter().collect();
+
+        SortOrder::DueDateAsc.apply(&mut refs);
+        // Task with due date should be first
+        assert_eq!(refs[0].title, "Has due date");
+        // Tasks without due date should follow, sorted by created_at
+        assert_eq!(refs[1].title, "No due date 1");
+        assert_eq!(refs[2].title, "No due date 2");
     }
 }

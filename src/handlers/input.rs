@@ -29,7 +29,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{App, InputMode, View};
+use crate::app::{App, FocusPanel, InputMode, View};
 use crate::handlers::commands::{Command, TuiLoggerEvent};
 use crate::models::Priority;
 
@@ -125,7 +125,7 @@ fn map_debug_view_key(key: KeyEvent) -> Option<Command> {
 ///
 /// This is where most keybindings are defined for navigating and
 /// managing tasks.
-fn map_normal_mode_key(key: KeyEvent, _app: &App) -> Option<Command> {
+fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
     match key.code {
         // === Quit ===
         KeyCode::Char('q') => Some(Command::Quit),
@@ -145,14 +145,41 @@ fn map_normal_mode_key(key: KeyEvent, _app: &App) -> Option<Command> {
         }
 
         // === Panel Switching ===
-        KeyCode::Tab => Some(Command::SwitchPanel),
+        // Tab toggles sidebar section when in sidebar, otherwise switches panel
+        KeyCode::Tab => {
+            if app.focus == FocusPanel::Sidebar {
+                Some(Command::ToggleSidebarSection)
+            } else {
+                Some(Command::SwitchPanel)
+            }
+        }
         KeyCode::Char('h') | KeyCode::Left => Some(Command::FocusSidebar),
         KeyCode::Char('l') | KeyCode::Right => Some(Command::FocusTaskList),
 
-        // === Task Actions ===
-        KeyCode::Char('a') => Some(Command::AddTask),
-        KeyCode::Char('e') | KeyCode::Enter => Some(Command::EditTask),
-        KeyCode::Char('d') => Some(Command::DeleteTask),
+        // === Context-sensitive actions (tasks or projects based on focus) ===
+        KeyCode::Char('a') => {
+            if app.focus == FocusPanel::Sidebar {
+                Some(Command::AddProject)
+            } else {
+                Some(Command::AddTask)
+            }
+        }
+        KeyCode::Char('e') | KeyCode::Enter => {
+            if app.focus == FocusPanel::Sidebar {
+                Some(Command::EditProject)
+            } else {
+                Some(Command::EditTask)
+            }
+        }
+        KeyCode::Char('d') => {
+            if app.focus == FocusPanel::Sidebar {
+                Some(Command::DeleteProject)
+            } else {
+                Some(Command::DeleteTask)
+            }
+        }
+
+        // === Task-specific actions ===
         KeyCode::Char(' ') => Some(Command::ToggleTaskStatus),
         KeyCode::Char('p') => Some(Command::CyclePriority),
         KeyCode::Char('t') => Some(Command::EditTags),

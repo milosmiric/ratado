@@ -12,7 +12,7 @@
 
 **Priority:** High
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -98,7 +98,7 @@ Command::NavigateUp if app.focus == FocusPanel::Sidebar => {
 
 **Priority:** Medium
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -193,7 +193,7 @@ pub async fn delete_project(
 
 **Priority:** Medium
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -315,11 +315,11 @@ fn render_tags(tags: &[String], max_width: u16) -> Span {
 
 Before moving to Phase 7, ensure:
 
-- [ ] All 3 stories completed
-- [ ] Project selection filters tasks
-- [ ] Can create/edit/delete projects
-- [ ] Tags can be added to tasks
-- [ ] Tag autocomplete works
-- [ ] Can filter by tag
-- [ ] All changes persist to database
-- [ ] Tests pass
+- [x] All 3 stories completed
+- [x] Project selection filters tasks
+- [x] Can create/edit/delete projects
+- [x] Tags can be added to tasks
+- [x] Tag autocomplete works
+- [x] Can filter by tag
+- [x] All changes persist to database
+- [x] Tests pass (206 tests passing)

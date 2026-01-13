@@ -50,7 +50,7 @@ use crossterm::event::KeyEvent;
 use log::debug;
 
 use crate::app::{App, AppError};
-use crate::ui::dialogs::{Dialog, DialogAction};
+use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction};
 
 /// Handles an application event and updates state accordingly.
 ///
@@ -185,6 +185,71 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                 DialogAction::None => {
                     // Keep the dialog open
                     app.dialog = Some(Dialog::FilterSort(filter_dialog));
+                }
+            }
+        }
+        Some(Dialog::DeleteProject(mut delete_dialog)) => {
+            let action = delete_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    let project_id = delete_dialog.project_id.clone();
+                    match delete_dialog.choice() {
+                        DeleteProjectChoice::MoveToInbox => {
+                            // Move all tasks to inbox, then delete project
+                            app.db.move_tasks_to_inbox(&project_id).await?;
+                            app.db.delete_project(&project_id).await?;
+                            app.set_status("Project deleted, tasks moved to Inbox");
+                        }
+                        DeleteProjectChoice::DeleteTasks => {
+                            // Delete all tasks in project, then delete project
+                            app.db.delete_tasks_by_project(&project_id).await?;
+                            app.db.delete_project(&project_id).await?;
+                            app.set_status("Project and tasks deleted");
+                        }
+                        DeleteProjectChoice::Cancel => {
+                            // Shouldn't reach here, but handle anyway
+                            app.clear_status();
+                        }
+                    }
+                    app.load_data().await?;
+                    // Reset project selection to "All Tasks"
+                    app.selected_project_index = 0;
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::DeleteProject(delete_dialog));
+                }
+            }
+        }
+        Some(Dialog::Project(mut project_dialog)) => {
+            let action = project_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Create or update the project
+                    if let Some(project) = project_dialog.to_project() {
+                        if project_dialog.is_editing() {
+                            app.db.update_project(&project).await?;
+                            app.set_status("Project updated");
+                        } else {
+                            app.db.insert_project(&project).await?;
+                            app.set_status("Project created");
+                        }
+                        app.load_data().await?;
+                    }
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::Project(project_dialog));
                 }
             }
         }
