@@ -253,6 +253,37 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                 }
             }
         }
+        Some(Dialog::MoveToProject(mut move_dialog)) => {
+            let action = move_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Move the task to the selected project
+                    if let Some(project_id) = move_dialog.selected_project_id() {
+                        let task_id = move_dialog.task_id.clone();
+                        if let Some(task) = app.tasks.iter_mut().find(|t| t.id == task_id) {
+                            task.project_id = Some(project_id.clone());
+                            task.updated_at = chrono::Utc::now();
+                            app.db.update_task(task).await?;
+                            let project_name = move_dialog
+                                .selected_project()
+                                .map(|p| p.name.as_str())
+                                .unwrap_or("Unknown");
+                            app.set_status(format!("Task moved to {}", project_name));
+                            app.load_data().await?;
+                        }
+                    }
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::MoveToProject(move_dialog));
+                }
+            }
+        }
         None => {
             // No dialog was active (shouldn't happen)
         }

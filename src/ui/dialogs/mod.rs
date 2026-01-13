@@ -9,6 +9,7 @@
 //! - [`ConfirmDialog`] - Yes/No confirmation prompts
 //! - [`DeleteProjectDialog`] - Project deletion with task handling options
 //! - [`FilterSortDialog`] - Filter and sort selection
+//! - [`MoveToProjectDialog`] - Move task to different project
 //! - [`ProjectDialog`] - Create or edit a project
 //!
 //! ## Usage
@@ -21,12 +22,14 @@ mod add_task;
 mod confirm;
 mod delete_project;
 mod filter_sort;
+mod move_to_project;
 mod project;
 
 pub use add_task::AddTaskDialog;
 pub use confirm::ConfirmDialog;
 pub use delete_project::{DeleteProjectChoice, DeleteProjectDialog};
 pub use filter_sort::FilterSortDialog;
+pub use move_to_project::MoveToProjectDialog;
 pub use project::ProjectDialog;
 
 use ratatui::{
@@ -59,6 +62,8 @@ pub enum Dialog {
     DeleteProject(DeleteProjectDialog),
     /// Filter and sort selection dialog
     FilterSort(FilterSortDialog),
+    /// Move task to project dialog
+    MoveToProject(MoveToProjectDialog),
     /// Add or edit project dialog
     Project(ProjectDialog),
 }
@@ -71,6 +76,7 @@ impl Dialog {
             Dialog::Confirm(dialog) => dialog.render(frame),
             Dialog::DeleteProject(dialog) => dialog.render(frame),
             Dialog::FilterSort(dialog) => dialog.render(frame),
+            Dialog::MoveToProject(dialog) => dialog.render(frame),
             Dialog::Project(dialog) => dialog.render(frame),
         }
     }

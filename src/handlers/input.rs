@@ -145,14 +145,7 @@ fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
         }
 
         // === Panel Switching ===
-        // Tab toggles sidebar section when in sidebar, otherwise switches panel
-        KeyCode::Tab => {
-            if app.focus == FocusPanel::Sidebar {
-                Some(Command::ToggleSidebarSection)
-            } else {
-                Some(Command::SwitchPanel)
-            }
-        }
+        KeyCode::Tab => Some(Command::SwitchPanel),
         KeyCode::Char('h') | KeyCode::Left => Some(Command::FocusSidebar),
         KeyCode::Char('l') | KeyCode::Right => Some(Command::FocusTaskList),
 

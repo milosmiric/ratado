@@ -90,15 +90,6 @@ pub enum FocusPanel {
     TaskList,
 }
 
-/// Which section of the sidebar is active.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SidebarSection {
-    /// Projects section
-    #[default]
-    Projects,
-    /// Tags section
-    Tags,
-}
 
 /// Central application state.
 ///
@@ -133,17 +124,11 @@ pub struct App {
     /// Which panel has focus
     pub focus: FocusPanel,
 
-    /// Which section of the sidebar is active
-    pub sidebar_section: SidebarSection,
-
     /// Index of selected task in the filtered list (None if no tasks)
     pub selected_task_index: Option<usize>,
 
     /// Index of selected project in sidebar (0 = "All Tasks")
     pub selected_project_index: usize,
-
-    /// Index of selected tag in sidebar (None = no tag filter)
-    pub selected_tag_index: Option<usize>,
 
     /// Current filter applied to task list
     pub filter: Filter,
@@ -201,10 +186,8 @@ impl App {
             current_view: View::Main,
             input_mode: InputMode::Normal,
             focus: FocusPanel::TaskList,
-            sidebar_section: SidebarSection::Projects,
             selected_task_index: None,
             selected_project_index: 0,
-            selected_tag_index: None,
             filter: Filter::Pending,
             sort: SortOrder::DueDateAsc,
             input_buffer: String::new(),
@@ -264,9 +247,6 @@ impl App {
                 .map(|p| p.id.clone())
         };
 
-        // Apply tag filter if a specific tag is selected
-        let tag_filter = self.selected_tag().map(|t| t.name.clone());
-
         let mut tasks: Vec<&Task> = self
             .tasks
             .iter()
@@ -277,11 +257,6 @@ impl App {
                 {
                     return false;
                 }
-                // Apply tag filter
-                if let Some(ref tag_name) = tag_filter
-                    && !t.tags.iter().any(|tag| tag.eq_ignore_ascii_case(tag_name)) {
-                        return false;
-                    }
                 // Apply status/date filter
                 self.filter.matches(t)
             })
@@ -289,11 +264,6 @@ impl App {
 
         self.sort.apply(&mut tasks);
         tasks
-    }
-
-    /// Returns the currently selected tag, if any.
-    pub fn selected_tag(&self) -> Option<&Tag> {
-        self.selected_tag_index.and_then(|idx| self.tags.get(idx))
     }
 
     /// Returns the currently selected task, if any.
@@ -398,48 +368,6 @@ impl App {
         let count = self.projects.len() + 1; // +1 for "All Tasks"
         self.selected_project_index = (self.selected_project_index + 1) % count;
         self.update_task_selection();
-    }
-
-    /// Moves tag selection up.
-    pub fn select_previous_tag(&mut self) {
-        if self.tags.is_empty() {
-            return;
-        }
-
-        self.selected_tag_index = match self.selected_tag_index {
-            None => Some(self.tags.len() - 1), // Wrap from "All" to last tag
-            Some(0) => None,                    // Go to "All Tags" (no filter)
-            Some(i) => Some(i - 1),
-        };
-        self.update_task_selection();
-    }
-
-    /// Moves tag selection down.
-    pub fn select_next_tag(&mut self) {
-        if self.tags.is_empty() {
-            return;
-        }
-
-        self.selected_tag_index = match self.selected_tag_index {
-            None => Some(0),                                                    // Go from "All" to first tag
-            Some(i) if i >= self.tags.len() - 1 => None,                       // Wrap to "All Tags"
-            Some(i) => Some(i + 1),
-        };
-        self.update_task_selection();
-    }
-
-    /// Clears the tag filter.
-    pub fn clear_tag_filter(&mut self) {
-        self.selected_tag_index = None;
-        self.update_task_selection();
-    }
-
-    /// Switches between projects and tags sections in the sidebar.
-    pub fn toggle_sidebar_section(&mut self) {
-        self.sidebar_section = match self.sidebar_section {
-            SidebarSection::Projects => SidebarSection::Tags,
-            SidebarSection::Tags => SidebarSection::Projects,
-        };
     }
 
     /// Updates task selection based on current filters.

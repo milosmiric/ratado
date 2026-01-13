@@ -128,6 +128,9 @@ impl Database {
         let db = Builder::new_local(&path_str).build().await?;
         let conn = db.connect()?;
 
+        // Enable foreign key constraints
+        conn.execute("PRAGMA foreign_keys = ON", ()).await?;
+
         Ok(Self { conn })
     }
 
@@ -157,6 +160,10 @@ impl Database {
     pub async fn open_in_memory() -> Result<Self> {
         let db = Builder::new_local(":memory:").build().await?;
         let conn = db.connect()?;
+
+        // Enable foreign key constraints
+        conn.execute("PRAGMA foreign_keys = ON", ()).await?;
+
         Ok(Self { conn })
     }
 

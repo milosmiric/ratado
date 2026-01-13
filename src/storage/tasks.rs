@@ -125,6 +125,9 @@ impl Database {
 
     /// Updates an existing task.
     ///
+    /// Also cleans up any orphaned tags (tags no longer associated with any tasks)
+    /// after updating the task's tags.
+    ///
     /// # Arguments
     ///
     /// * `task` - The task with updated values
@@ -164,10 +167,15 @@ impl Database {
             self.add_tag_to_task(&task.id, tag).await?;
         }
 
+        // Clean up any tags that are no longer associated with any tasks
+        self.cleanup_orphaned_tags().await?;
+
         Ok(())
     }
 
     /// Deletes a task by its ID.
+    ///
+    /// Also cleans up any orphaned tags (tags no longer associated with any tasks).
     ///
     /// # Arguments
     ///
@@ -181,14 +189,20 @@ impl Database {
     ///
     /// Returns an error if the delete fails.
     pub async fn delete_task(&self, id: &str) -> Result<bool> {
-        // Tags are deleted automatically via ON DELETE CASCADE
+        // Tags associations are deleted automatically via ON DELETE CASCADE
         let rows_affected = self
             .execute("DELETE FROM tasks WHERE id = ?1", [id])
             .await?;
+
+        // Clean up any tags that are no longer associated with any tasks
+        self.cleanup_orphaned_tags().await?;
+
         Ok(rows_affected > 0)
     }
 
     /// Deletes all tasks belonging to a project.
+    ///
+    /// Also cleans up any orphaned tags (tags no longer associated with any tasks).
     ///
     /// # Arguments
     ///
@@ -202,10 +216,14 @@ impl Database {
     ///
     /// Returns an error if the delete fails.
     pub async fn delete_tasks_by_project(&self, project_id: &str) -> Result<usize> {
-        // Tags are deleted automatically via ON DELETE CASCADE
+        // Tags associations are deleted automatically via ON DELETE CASCADE
         let rows_affected = self
             .execute("DELETE FROM tasks WHERE project_id = ?1", [project_id])
             .await?;
+
+        // Clean up any tags that are no longer associated with any tasks
+        self.cleanup_orphaned_tags().await?;
+
         Ok(rows_affected as usize)
     }
 

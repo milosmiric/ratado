@@ -32,9 +32,9 @@
 use log::debug;
 use tui_logger::TuiWidgetEvent;
 
-use crate::app::{App, AppError, FocusPanel, InputMode, SidebarSection, View};
+use crate::app::{App, AppError, FocusPanel, InputMode, View};
 use crate::models::{Filter, Priority};
-use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, ProjectDialog};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog};
 
 /// All possible commands that can be executed in the application.
 ///
@@ -62,8 +62,6 @@ pub enum Command {
     FocusSidebar,
     /// Focus the task list panel
     FocusTaskList,
-    /// Toggle between projects and tags sections in sidebar
-    ToggleSidebarSection,
 
     // === Task Actions ===
     /// Start adding a new task
@@ -219,10 +217,7 @@ impl Command {
             Command::NavigateUp => {
                 match app.focus {
                     FocusPanel::TaskList => app.select_previous_task(),
-                    FocusPanel::Sidebar => match app.sidebar_section {
-                        SidebarSection::Projects => app.select_previous_project(),
-                        SidebarSection::Tags => app.select_previous_tag(),
-                    },
+                    FocusPanel::Sidebar => app.select_previous_project(),
                 }
                 Ok(true)
             }
@@ -230,10 +225,7 @@ impl Command {
             Command::NavigateDown => {
                 match app.focus {
                     FocusPanel::TaskList => app.select_next_task(),
-                    FocusPanel::Sidebar => match app.sidebar_section {
-                        SidebarSection::Projects => app.select_next_project(),
-                        SidebarSection::Tags => app.select_next_tag(),
-                    },
+                    FocusPanel::Sidebar => app.select_next_project(),
                 }
                 Ok(true)
             }
@@ -299,11 +291,6 @@ impl Command {
 
             Command::FocusTaskList => {
                 app.focus = FocusPanel::TaskList;
-                Ok(true)
-            }
-
-            Command::ToggleSidebarSection => {
-                app.toggle_sidebar_section();
                 Ok(true)
             }
 
@@ -373,8 +360,15 @@ impl Command {
             }
 
             Command::MoveToProject => {
-                // TODO: Implement project picker modal
-                app.set_status("Move to project: Not yet implemented");
+                if let Some(task) = app.selected_task() {
+                    let dialog = MoveToProjectDialog::new(
+                        app.projects.clone(),
+                        task.id.clone(),
+                        task.project_id.as_deref(),
+                    );
+                    app.dialog = Some(Dialog::MoveToProject(dialog));
+                    app.set_status("Select project to move task to");
+                }
                 Ok(true)
             }
 

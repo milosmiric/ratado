@@ -250,6 +250,46 @@ impl Database {
         }
     }
 
+    /// Deletes all orphaned tags (tags with no associated tasks).
+    ///
+    /// This is called automatically after task deletion or update to keep
+    /// the database clean.
+    ///
+    /// # Returns
+    ///
+    /// The number of tags deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the delete operation fails.
+    pub async fn cleanup_orphaned_tags(&self) -> Result<usize> {
+        // Find orphaned tags using LEFT JOIN (tags with no task associations)
+        let mut rows = self
+            .query(
+                "SELECT t.id FROM tags t
+                 LEFT JOIN task_tags tt ON t.id = tt.tag_id
+                 WHERE tt.task_id IS NULL",
+                (),
+            )
+            .await?;
+
+        let mut orphaned_ids = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let id = value_to_string(row.get_value(0)?)?;
+            orphaned_ids.push(id);
+        }
+
+        // Delete each orphaned tag
+        let mut deleted = 0;
+        for id in orphaned_ids {
+            if self.delete_tag(&id).await? {
+                deleted += 1;
+            }
+        }
+
+        Ok(deleted)
+    }
+
     /// Gets all tags with their task counts.
     ///
     /// # Returns
@@ -488,5 +528,106 @@ mod tests {
         assert_eq!(retrieved.tags.len(), 2);
         assert!(retrieved.tags.contains(&"tag1".to_string()));
         assert!(retrieved.tags.contains(&"tag2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_orphaned_tags() {
+        let db = setup_db().await;
+
+        // Create an orphaned tag (not associated with any task)
+        db.insert_tag("orphaned").await.unwrap();
+
+        // Create a tag associated with a task
+        let task = Task::new("Task");
+        db.insert_task(&task).await.unwrap();
+        db.add_tag_to_task(&task.id, "used").await.unwrap();
+
+        // Verify both tags exist
+        let tags = db.get_all_tags().await.unwrap();
+        assert_eq!(tags.len(), 2);
+
+        // Clean up orphaned tags
+        let deleted = db.cleanup_orphaned_tags().await.unwrap();
+        assert_eq!(deleted, 1);
+
+        // Verify only the used tag remains
+        let tags = db.get_all_tags().await.unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].name, "used");
+    }
+
+    #[tokio::test]
+    async fn test_tag_deleted_when_task_deleted() {
+        let db = setup_db().await;
+
+        // Create a task with a unique tag
+        let mut task = Task::new("Task with tag");
+        task.tags = vec!["unique_tag".to_string()];
+        db.insert_task(&task).await.unwrap();
+
+        // Verify the tag exists
+        let tag = db.get_tag_by_name("unique_tag").await.unwrap();
+        assert!(tag.is_some());
+
+        // Delete the task (should clean up orphaned tags)
+        db.delete_task(&task.id).await.unwrap();
+
+        // Tag should now be deleted
+        let tag = db.get_tag_by_name("unique_tag").await.unwrap();
+        assert!(tag.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_tag_kept_when_shared_between_tasks() {
+        let db = setup_db().await;
+
+        // Create two tasks with the same tag
+        let mut task1 = Task::new("Task 1");
+        task1.tags = vec!["shared".to_string()];
+        db.insert_task(&task1).await.unwrap();
+
+        let mut task2 = Task::new("Task 2");
+        task2.tags = vec!["shared".to_string()];
+        db.insert_task(&task2).await.unwrap();
+
+        // Verify the tag exists
+        let tag = db.get_tag_by_name("shared").await.unwrap();
+        assert!(tag.is_some());
+
+        // Delete the first task
+        db.delete_task(&task1.id).await.unwrap();
+
+        // Tag should still exist (used by task2)
+        let tag = db.get_tag_by_name("shared").await.unwrap();
+        assert!(tag.is_some());
+
+        // Delete the second task
+        db.delete_task(&task2.id).await.unwrap();
+
+        // Tag should now be deleted
+        let tag = db.get_tag_by_name("shared").await.unwrap();
+        assert!(tag.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_tag_deleted_when_removed_from_task() {
+        let db = setup_db().await;
+
+        // Create a task with a tag
+        let mut task = Task::new("Task");
+        task.tags = vec!["removable".to_string()];
+        db.insert_task(&task).await.unwrap();
+
+        // Verify the tag exists
+        let tag = db.get_tag_by_name("removable").await.unwrap();
+        assert!(tag.is_some());
+
+        // Update the task to remove the tag
+        task.tags.clear();
+        db.update_task(&task).await.unwrap();
+
+        // Tag should now be deleted
+        let tag = db.get_tag_by_name("removable").await.unwrap();
+        assert!(tag.is_none());
     }
 }
