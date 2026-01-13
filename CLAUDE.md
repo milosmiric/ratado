@@ -47,3 +47,78 @@ src/
 - **Local-first**: All data stored at `~/.config/ratado/` (ratado.db + config.toml)
 - **Central state**: Single `App` struct manages all application state
 - **Event loop**: Input events + timer events → update state → render UI
+
+## Code Documentation Guidelines
+
+All code must be well-documented using Rust's documentation conventions. This helps with learning and maintainability.
+
+### Required Documentation
+
+1. **Module-level docs** (`//!`) - Every `mod.rs` or module file should have a top-level description explaining:
+   - What the module is responsible for
+   - Key types and functions it exports
+   - Usage examples where helpful
+
+2. **Public items** (`///`) - All public structs, enums, functions, and traits must have:
+   - A brief description of what it does
+   - `# Arguments` section for functions with parameters
+   - `# Returns` section for non-obvious return values
+   - `# Examples` section for complex or non-obvious usage
+   - `# Errors` section for functions that return `Result`
+   - `# Panics` section if the function can panic
+
+3. **Struct fields** - Document fields that aren't self-explanatory
+
+4. **Enum variants** - Document each variant's purpose and when it's used
+
+### Documentation Format
+
+```rust
+//! Module-level documentation goes here.
+//!
+//! This module handles X and provides Y.
+
+/// Brief description of the struct.
+///
+/// More detailed explanation if needed, explaining the purpose
+/// and how it fits into the larger system.
+///
+/// # Examples
+///
+/// ```
+/// use ratado::models::Task;
+///
+/// let task = Task::new("Buy groceries");
+/// assert_eq!(task.title, "Buy groceries");
+/// ```
+pub struct Task {
+    /// Unique identifier (UUID v4)
+    pub id: String,
+    /// The task title displayed in the UI
+    pub title: String,
+}
+
+/// Creates a new task with the given title.
+///
+/// # Arguments
+///
+/// * `title` - The title for the new task
+///
+/// # Returns
+///
+/// A new `Task` with default values and a generated UUID
+///
+/// # Examples
+///
+/// ```
+/// let task = Task::new("Complete project");
+/// ```
+pub fn new(title: &str) -> Self { ... }
+```
+
+### Running Documentation
+
+```bash
+cargo doc --open    # Generate and open docs in browser
+cargo doc --no-deps # Generate docs without dependencies
+```

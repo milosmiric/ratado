@@ -6,13 +6,15 @@
 
 **Outcome:** Project compiles, all modules in place, core models implemented with tests.
 
+**Status:** ✅ COMPLETED
+
 ---
 
 ## Story 1.1: Initialize Cargo Project
 
 **Priority:** Critical
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Completed
 
 ### Description
 
@@ -20,10 +22,10 @@ Set up the Cargo project with proper structure and dependencies.
 
 ### Tasks
 
-- [ ] Create `Cargo.toml` with all dependencies from specification (section 6.2)
-- [ ] Create `src/main.rs` with minimal async entry point
-- [ ] Create `src/lib.rs` for library exports
-- [ ] Verify project compiles with `cargo build`
+- [x] Create `Cargo.toml` with all dependencies from specification (section 6.2)
+- [x] Create `src/main.rs` with minimal async entry point
+- [x] Create `src/lib.rs` for library exports
+- [x] Verify project compiles with `cargo build`
 
 ### Cargo.toml Reference
 
@@ -39,26 +41,26 @@ ratatui = { version = "0.30", features = ["crossterm"] }
 crossterm = "0.29"
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "time"] }
 serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
+toml = "0.9"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.19", features = ["v7", "serde"] }
 directories = "6.0"
 notify-rust = "4.11"
 clap = { version = "4.5", features = ["derive"] }
 thiserror = "2.0"
-tui-logger = "0.17"
+tui-logger = "0.18"
 log = "0.4"
 
 [dev-dependencies]
-insta = { version = "1.42", features = ["yaml"] }
+insta = { version = "1.46", features = ["yaml"] }
 pretty_assertions = "1.4"
 ```
 
 ### Acceptance Criteria
 
-- [ ] `cargo build` succeeds without errors
-- [ ] `cargo run` starts and exits cleanly
-- [ ] All dependencies resolve correctly
+- [x] `cargo build` succeeds without errors
+- [x] `cargo run` starts and exits cleanly
+- [x] All dependencies resolve correctly
 
 ---
 
@@ -66,7 +68,7 @@ pretty_assertions = "1.4"
 
 **Priority:** Critical
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Completed
 
 ### Description
 
@@ -74,14 +76,14 @@ Set up the directory and module structure as defined in the specification.
 
 ### Tasks
 
-- [ ] Create `src/app.rs` with empty App struct placeholder
-- [ ] Create `src/ui/mod.rs` with submodule declarations
-- [ ] Create `src/models/mod.rs` with submodule declarations
-- [ ] Create `src/handlers/mod.rs` with submodule declarations
-- [ ] Create `src/storage/mod.rs` with submodule declarations
-- [ ] Create `src/notifications/mod.rs` placeholder
-- [ ] Create `src/utils/mod.rs` with submodule declarations
-- [ ] Wire up all modules in `lib.rs`
+- [x] Create `src/app.rs` with empty App struct placeholder
+- [x] Create `src/ui/mod.rs` with submodule declarations
+- [x] Create `src/models/mod.rs` with submodule declarations
+- [x] Create `src/handlers/mod.rs` with submodule declarations
+- [x] Create `src/storage/mod.rs` with submodule declarations
+- [x] Create `src/notifications/mod.rs` placeholder
+- [x] Create `src/utils/mod.rs` with submodule declarations
+- [x] Wire up all modules in `lib.rs`
 
 ### Expected Structure
 
@@ -106,9 +108,9 @@ src/
 
 ### Acceptance Criteria
 
-- [ ] All modules compile without errors
-- [ ] Module tree matches specification architecture
-- [ ] `cargo check` passes
+- [x] All modules compile without errors
+- [x] Module tree matches specification architecture
+- [x] `cargo check` passes
 
 ---
 
@@ -116,7 +118,7 @@ src/
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Completed
 
 ### Description
 
@@ -124,15 +126,16 @@ Implement the Task, Project, and related data structures.
 
 ### Tasks
 
-- [ ] Create `src/models/task.rs`:
+- [x] Create `src/models/task.rs`:
   - `Task` struct with all fields:
-    - `id: String` (UUID)
+    - `id: String` (UUID v7)
     - `title: String`
     - `description: Option<String>`
     - `due_date: Option<DateTime<Utc>>`
     - `priority: Priority`
     - `status: TaskStatus`
     - `project_id: Option<String>`
+    - `tags: Vec<String>`
     - `created_at: DateTime<Utc>`
     - `updated_at: DateTime<Utc>`
     - `completed_at: Option<DateTime<Utc>>`
@@ -149,7 +152,7 @@ Implement the Task, Project, and related data structures.
     - `Task::complete(&mut self)`
     - `Task::reopen(&mut self)`
 
-- [ ] Create `src/models/project.rs`:
+- [x] Create `src/models/project.rs`:
   - `Project` struct:
     - `id: String`
     - `name: String`
@@ -157,8 +160,9 @@ Implement the Task, Project, and related data structures.
     - `icon: String`
     - `created_at: DateTime<Utc>`
   - `Project::new(name: &str) -> Project`
+  - `Project::with_style(name: &str, color: &str, icon: &str) -> Project`
 
-- [ ] Create `src/models/filter.rs`:
+- [x] Create `src/models/filter.rs`:
   - `Filter` enum:
     - `All`
     - `Pending`
@@ -180,10 +184,11 @@ Implement the Task, Project, and related data structures.
     - `CreatedAsc`
     - `Alphabetical`
   - `Filter::apply(&self, tasks: &[Task]) -> Vec<&Task>`
+  - `Filter::matches(&self, task: &Task) -> bool`
   - `SortOrder::apply(&self, tasks: &mut [&Task])`
 
-- [ ] Update `src/models/mod.rs` to export all types
-- [ ] Add unit tests for all models
+- [x] Update `src/models/mod.rs` to export all types
+- [x] Add unit tests for all models
 
 ### Test Cases
 
@@ -213,11 +218,11 @@ fn test_priority_ordering() {
 
 ### Acceptance Criteria
 
-- [ ] All model structs serialize/deserialize correctly with serde
-- [ ] `Task::is_overdue()` returns correct results
-- [ ] `Task::is_due_today()` returns correct results
-- [ ] Priority ordering works as expected
-- [ ] All unit tests pass
+- [x] All model structs serialize/deserialize correctly with serde
+- [x] `Task::is_overdue()` returns correct results
+- [x] `Task::is_due_today()` returns correct results
+- [x] Priority ordering works as expected
+- [x] All unit tests pass
 
 ---
 
@@ -225,7 +230,7 @@ fn test_priority_ordering() {
 
 **Priority:** High
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Completed
 
 ### Description
 
@@ -233,7 +238,7 @@ Create utility functions for date/time handling and other helpers.
 
 ### Tasks
 
-- [ ] Create `src/utils/datetime.rs`:
+- [x] Create `src/utils/datetime.rs`:
   - `format_relative_date(date: DateTime<Utc>) -> String`
     - Returns: "Today", "Tomorrow", "Yesterday", "Mon 15", "Jan 15"
   - `format_due_date(date: Option<DateTime<Utc>>) -> String`
@@ -244,11 +249,11 @@ Create utility functions for date/time handling and other helpers.
   - `days_until(date: DateTime<Utc>) -> i64`
   - `now() -> DateTime<Utc>` (wrapper for testing)
 
-- [ ] Create `src/utils/ids.rs`:
-  - `generate_id() -> String` (UUID v4)
+- [x] Create `src/utils/ids.rs`:
+  - `generate_id() -> String` (UUID v7 - time-ordered)
 
-- [ ] Update `src/utils/mod.rs` to export all utilities
-- [ ] Add unit tests
+- [x] Update `src/utils/mod.rs` to export all utilities
+- [x] Add unit tests
 
 ### Test Cases
 
@@ -274,9 +279,9 @@ fn test_days_until_positive() {
 
 ### Acceptance Criteria
 
-- [ ] Date formatting matches UI mockups
-- [ ] All utility functions have tests
-- [ ] `generate_id()` produces valid UUIDs
+- [x] Date formatting matches UI mockups
+- [x] All utility functions have tests
+- [x] `generate_id()` produces valid UUIDs (v7)
 
 ---
 
@@ -284,8 +289,9 @@ fn test_days_until_positive() {
 
 Before moving to Phase 2, ensure:
 
-- [ ] All 4 stories completed
-- [ ] `cargo build` succeeds
-- [ ] `cargo test` passes (all model and utility tests)
-- [ ] `cargo clippy` has no warnings
-- [ ] Module structure matches specification
+- [x] All 4 stories completed
+- [x] `cargo build` succeeds
+- [x] `cargo test` passes (all model and utility tests) - 29 unit tests + 29 doc tests
+- [x] `cargo clippy` has no warnings
+- [x] Module structure matches specification
+- [x] All code is documented with rustdoc comments
