@@ -11,6 +11,7 @@ Ratado is a terminal-based task manager and reminder application built with Rust
 - `/docs/SPECIFICATION.md` - Full requirements, features, data model, and technical architecture
 - `/docs/UI_MOCKUPS.md` - ASCII mockups of all screens and UI states
 - `/docs/TESTING_STRATEGY.md` - TDD approach, testing patterns, and examples
+- `/docs/plan/` - Phased implementation plan (12 phases, 44 stories)
 
 ## Build Commands
 
