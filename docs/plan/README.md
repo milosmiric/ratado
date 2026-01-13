@@ -53,7 +53,7 @@ Update this section as phases are completed:
 
 - [x] Phase 1: Project Foundation
 - [x] Phase 2: Storage Layer
-- [ ] Phase 3: Core UI
+- [x] Phase 3: Core UI
 - [ ] Phase 4: Input Handling
 - [ ] Phase 5: Task Operations
 - [ ] Phase 6: Projects & Tags

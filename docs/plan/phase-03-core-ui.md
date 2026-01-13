@@ -12,7 +12,7 @@
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -142,7 +142,7 @@ impl App {
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -260,7 +260,7 @@ async fn run_app<B: Backend>(
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -358,7 +358,7 @@ pub fn render_main_view(frame: &mut Frame, app: &App, area: Rect) {
 
 **Priority:** High
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -439,7 +439,7 @@ fn render_projects(frame: &mut Frame, app: &App, area: Rect) {
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -571,10 +571,10 @@ mod tests {
 
 Before moving to Phase 4, ensure:
 
-- [ ] All 5 stories completed
-- [ ] App launches and displays UI
-- [ ] Layout matches mockups
-- [ ] Tasks load from database and display
-- [ ] Can quit with `q` (basic quit handler)
-- [ ] Terminal restores properly on exit
-- [ ] `cargo test` passes (including snapshots)
+- [x] All 5 stories completed
+- [x] App launches and displays UI
+- [x] Layout matches mockups
+- [x] Tasks load from database and display
+- [x] Can quit with `q` (basic quit handler)
+- [x] Terminal restores properly on exit
+- [x] `cargo test` passes (including snapshots)
