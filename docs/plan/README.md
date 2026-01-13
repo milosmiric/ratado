@@ -55,7 +55,7 @@ Update this section as phases are completed:
 - [x] Phase 2: Storage Layer
 - [x] Phase 3: Core UI
 - [x] Phase 4: Input Handling
-- [ ] Phase 5: Task Operations
+- [x] Phase 5: Task Operations (MVP Complete!)
 - [ ] Phase 6: Projects & Tags
 - [ ] Phase 7: Filtering & Search
 - [ ] Phase 8: Additional Views

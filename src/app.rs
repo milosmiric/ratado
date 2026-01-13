@@ -25,11 +25,17 @@
 //! # }
 //! ```
 
+use std::time::Instant;
+
 use thiserror::Error;
 use tui_logger::TuiWidgetState;
 
 use crate::models::{Filter, Priority, Project, SortOrder, Task, TaskStatus};
 use crate::storage::{Database, StorageError, Tag};
+use crate::ui::dialogs::Dialog;
+
+/// How long status messages are displayed before auto-clearing (in seconds).
+const STATUS_MESSAGE_TIMEOUT_SECS: u64 = 3;
 
 /// Errors that can occur in the application.
 #[derive(Error, Debug)]
@@ -147,8 +153,14 @@ pub struct App {
     /// Status message to display (temporary)
     pub status_message: Option<String>,
 
+    /// When the status message was set (for auto-clearing)
+    status_message_set_at: Option<Instant>,
+
     /// Task being edited (for edit mode)
     pub editing_task: Option<Task>,
+
+    /// Currently active dialog (if any)
+    pub dialog: Option<Dialog>,
 }
 
 impl App {
@@ -186,7 +198,9 @@ impl App {
             log_state: TuiWidgetState::default(),
             should_quit: false,
             status_message: None,
+            status_message_set_at: None,
             editing_task: None,
+            dialog: None,
         };
         app.load_data().await?;
         Ok(app)
@@ -374,21 +388,28 @@ impl App {
         };
     }
 
-    /// Sets a temporary status message.
+    /// Sets a temporary status message that auto-clears after a timeout.
     pub fn set_status(&mut self, message: impl Into<String>) {
         self.status_message = Some(message.into());
+        self.status_message_set_at = Some(Instant::now());
     }
 
     /// Clears the status message.
     pub fn clear_status(&mut self) {
         self.status_message = None;
+        self.status_message_set_at = None;
     }
 
     /// Called on each tick of the event loop.
     ///
     /// Used for time-based updates like clearing status messages.
     pub fn on_tick(&mut self) {
-        // Could implement status message timeout here
+        // Auto-clear status message after timeout
+        if let Some(set_at) = self.status_message_set_at {
+            if set_at.elapsed().as_secs() >= STATUS_MESSAGE_TIMEOUT_SECS {
+                self.clear_status();
+            }
+        }
     }
 
     /// Cycles through filter options.

@@ -46,9 +46,11 @@ pub use commands::Command;
 pub use events::{AppEvent, EventHandler};
 pub use input::map_key_to_command;
 
+use crossterm::event::KeyEvent;
 use log::debug;
 
 use crate::app::{App, AppError};
+use crate::ui::dialogs::{Dialog, DialogAction};
 
 /// Handles an application event and updates state accordingly.
 ///
@@ -72,6 +74,11 @@ pub async fn handle_event(app: &mut App, event: AppEvent) -> Result<bool, AppErr
     match event {
         AppEvent::Key(key) => {
             debug!("Key event: {:?}", key);
+
+            // If a dialog is active, route events to it first
+            if app.dialog.is_some() {
+                return handle_dialog_key(app, key).await;
+            }
 
             // Map the key to a command based on current context
             if let Some(cmd) = map_key_to_command(key, app) {
@@ -100,6 +107,93 @@ pub async fn handle_event(app: &mut App, event: AppEvent) -> Result<bool, AppErr
             Ok(true)
         }
     }
+}
+
+/// Handles key events when a dialog is active.
+async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppError> {
+    // Take the dialog out to work with it
+    let dialog = app.dialog.take();
+
+    match dialog {
+        Some(Dialog::AddTask(mut add_dialog)) => {
+            let action = add_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Create or update the task
+                    if let Some(task) = add_dialog.to_task() {
+                        if add_dialog.is_editing() {
+                            app.db.update_task(&task).await?;
+                            app.set_status("Task updated");
+                        } else {
+                            app.db.insert_task(&task).await?;
+                            app.set_status("Task created");
+                        }
+                        app.load_data().await?;
+                    }
+                    // Dialog closed, don't put it back
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed, don't put it back
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::AddTask(add_dialog));
+                }
+            }
+        }
+        Some(Dialog::Confirm(mut confirm_dialog)) => {
+            let action = confirm_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Confirmation accepted - execute the pending delete
+                    // The task ID was stored when the dialog was created
+                    // For now we handle this by checking if we have a selected task
+                    if let Some(task) = app.selected_task().cloned() {
+                        app.db.delete_task(&task.id).await?;
+                        app.load_data().await?;
+                        app.set_status("Task deleted");
+                    }
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::Confirm(confirm_dialog));
+                }
+            }
+        }
+        Some(Dialog::FilterSort(mut filter_dialog)) => {
+            let action = filter_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Apply the selected filter and sort
+                    app.filter = filter_dialog.selected_filter();
+                    app.sort = filter_dialog.selected_sort();
+                    // Reset selection for new filter
+                    let count = app.visible_tasks().len();
+                    app.selected_task_index = if count > 0 { Some(0) } else { None };
+                    app.set_status(format!("Filter: {:?}, Sort: {:?}", app.filter, app.sort));
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    // Dialog closed without applying changes
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::FilterSort(filter_dialog));
+                }
+            }
+        }
+        None => {
+            // No dialog was active (shouldn't happen)
+        }
+    }
+
+    Ok(true)
 }
 
 #[cfg(test)]

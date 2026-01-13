@@ -34,6 +34,7 @@ use tui_logger::TuiWidgetEvent;
 
 use crate::app::{App, AppError, FocusPanel, InputMode, View};
 use crate::models::{Filter, Priority};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, Dialog, FilterSortDialog};
 
 /// All possible commands that can be executed in the application.
 ///
@@ -95,18 +96,14 @@ pub enum Command {
     // === Filters ===
     /// Set a specific filter
     SetFilter(Filter),
-    /// Clear the current filter (show all)
-    ClearFilter,
     /// Filter to show only tasks due today
     FilterToday,
     /// Filter to show only tasks due this week
     FilterThisWeek,
     /// Filter by priority level
     FilterByPriority(Priority),
-    /// Cycle through filter options
-    CycleFilter,
-    /// Cycle through sort options
-    CycleSort,
+    /// Open the filter/sort selection dialog
+    ShowFilterSort,
 
     // === Input Mode ===
     /// Enter editing mode for text input
@@ -293,31 +290,25 @@ impl Command {
 
             // === Task Actions ===
             Command::AddTask => {
-                app.input_mode = InputMode::Editing;
-                app.input_buffer.clear();
-                app.input_cursor = 0;
-                app.editing_task = None;
-                app.set_status("Enter task title...");
+                // Open the add task dialog
+                app.dialog = Some(Dialog::AddTask(AddTaskDialog::new()));
+                app.set_status("Tab between fields, Ctrl+Enter to save");
                 Ok(true)
             }
 
             Command::EditTask => {
                 if let Some(task) = app.selected_task().cloned() {
-                    app.input_mode = InputMode::Editing;
-                    app.input_buffer = task.title.clone();
-                    app.input_cursor = task.title.len();
-                    app.editing_task = Some(task);
-                    app.set_status("Editing task...");
+                    // Open the add task dialog in edit mode
+                    app.dialog = Some(Dialog::AddTask(AddTaskDialog::from_task(&task)));
+                    app.set_status("Tab between fields, Ctrl+Enter to save");
                 }
                 Ok(true)
             }
 
             Command::DeleteTask => {
                 if let Some(task) = app.selected_task() {
-                    let task_id = task.id.clone();
-                    app.db.delete_task(&task_id).await?;
-                    app.load_data().await?;
-                    app.set_status("Task deleted");
+                    // Open confirmation dialog
+                    app.dialog = Some(Dialog::Confirm(ConfirmDialog::delete_task(&task.title)));
                 }
                 Ok(true)
             }
@@ -415,10 +406,11 @@ impl Command {
                 Ok(true)
             }
 
-            Command::ClearFilter => {
-                app.filter = Filter::All;
-                let count = app.visible_tasks().len();
-                app.selected_task_index = if count > 0 { Some(0) } else { None };
+            Command::ShowFilterSort => {
+                app.dialog = Some(Dialog::FilterSort(FilterSortDialog::new(
+                    &app.filter,
+                    &app.sort,
+                )));
                 Ok(true)
             }
 
@@ -443,16 +435,6 @@ impl Command {
                 let count = app.visible_tasks().len();
                 app.selected_task_index = if count > 0 { Some(0) } else { None };
                 app.set_status(format!("Showing {:?} priority tasks", priority));
-                Ok(true)
-            }
-
-            Command::CycleFilter => {
-                app.cycle_filter();
-                Ok(true)
-            }
-
-            Command::CycleSort => {
-                app.cycle_sort();
                 Ok(true)
             }
 
@@ -710,18 +692,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_task_enters_edit_mode() {
+    async fn test_add_task_opens_dialog() {
+        use crate::ui::dialogs::Dialog;
+
         let mut app = setup_app().await;
-        assert_eq!(app.input_mode, InputMode::Normal);
+        assert!(app.dialog.is_none());
 
         Command::AddTask.execute(&mut app).await.unwrap();
-        assert_eq!(app.input_mode, InputMode::Editing);
-        assert!(app.input_buffer.is_empty());
-        assert!(app.editing_task.is_none());
+
+        // Dialog should be open
+        assert!(app.dialog.is_some());
+        assert!(matches!(app.dialog, Some(Dialog::AddTask(_))));
     }
 
     #[tokio::test]
-    async fn test_edit_task() {
+    async fn test_edit_task_opens_dialog() {
+        use crate::ui::dialogs::Dialog;
+
         let mut app = setup_app().await;
         let task = Task::new("Original title");
         app.db.insert_task(&task).await.unwrap();
@@ -729,13 +716,21 @@ mod tests {
         app.selected_task_index = Some(0);
 
         Command::EditTask.execute(&mut app).await.unwrap();
-        assert_eq!(app.input_mode, InputMode::Editing);
-        assert_eq!(app.input_buffer, "Original title");
-        assert!(app.editing_task.is_some());
+
+        // Dialog should be open with task data
+        assert!(app.dialog.is_some());
+        if let Some(Dialog::AddTask(ref dialog)) = app.dialog {
+            assert_eq!(dialog.title.value(), "Original title");
+            assert!(dialog.is_editing());
+        } else {
+            panic!("Expected AddTask dialog");
+        }
     }
 
     #[tokio::test]
-    async fn test_delete_task() {
+    async fn test_delete_task_opens_confirm_dialog() {
+        use crate::ui::dialogs::Dialog;
+
         let mut app = setup_app().await;
         let task = Task::new("Delete me");
         app.db.insert_task(&task).await.unwrap();
@@ -744,7 +739,11 @@ mod tests {
         app.selected_task_index = Some(0);
 
         Command::DeleteTask.execute(&mut app).await.unwrap();
-        assert_eq!(app.tasks.len(), 0);
+
+        // Confirm dialog should be open, task not yet deleted
+        assert!(app.dialog.is_some());
+        assert!(matches!(app.dialog, Some(Dialog::Confirm(_))));
+        assert_eq!(app.tasks.len(), 1); // Not deleted until confirmed
     }
 
     #[tokio::test]
@@ -776,12 +775,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_clear_filter() {
+    async fn test_show_filter_sort() {
         let mut app = setup_app().await;
-        app.filter = Filter::DueToday;
 
-        Command::ClearFilter.execute(&mut app).await.unwrap();
-        assert_eq!(app.filter, Filter::All);
+        Command::ShowFilterSort.execute(&mut app).await.unwrap();
+        assert!(matches!(app.dialog, Some(Dialog::FilterSort(_))));
     }
 
     #[tokio::test]

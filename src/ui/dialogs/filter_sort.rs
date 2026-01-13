@@ -1,0 +1,357 @@
+//! Filter and sort selection dialog.
+//!
+//! A popup dialog for selecting filter and sort options with keyboard navigation.
+
+use crossterm::event::{KeyCode, KeyEvent};
+use ratatui::{
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph},
+    Frame,
+};
+
+use crate::models::{Filter, SortOrder};
+use crate::ui::dialogs::{centered_rect, DialogAction};
+
+/// Which section of the dialog is focused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FilterSortSection {
+    #[default]
+    Filter,
+    Sort,
+}
+
+/// Dialog for selecting filter and sort options.
+#[derive(Debug, Clone)]
+pub struct FilterSortDialog {
+    /// Currently focused section
+    pub section: FilterSortSection,
+    /// Selected filter index
+    pub filter_index: usize,
+    /// Selected sort index
+    pub sort_index: usize,
+}
+
+impl FilterSortDialog {
+    /// All available filter options.
+    const FILTERS: &'static [(Filter, &'static str, &'static str)] = &[
+        (Filter::All, "All", "Show all tasks"),
+        (Filter::Pending, "Pending", "Tasks not yet completed"),
+        (Filter::Completed, "Completed", "Finished tasks"),
+        (Filter::DueToday, "Due Today", "Tasks due today"),
+        (Filter::DueThisWeek, "Due This Week", "Tasks due within 7 days"),
+        (Filter::Overdue, "Overdue", "Past due tasks"),
+        (Filter::ByPriority(crate::models::Priority::Urgent), "Urgent", "Urgent priority only"),
+        (Filter::ByPriority(crate::models::Priority::High), "High", "High priority only"),
+        (Filter::ByPriority(crate::models::Priority::Medium), "Medium", "Medium priority only"),
+        (Filter::ByPriority(crate::models::Priority::Low), "Low", "Low priority only"),
+    ];
+
+    /// All available sort options.
+    const SORTS: &'static [(SortOrder, &'static str, &'static str)] = &[
+        (SortOrder::DueDateAsc, "Due Date", "Earliest due first"),
+        (SortOrder::PriorityDesc, "Priority", "Highest priority first"),
+        (SortOrder::CreatedDesc, "Created", "Newest first"),
+        (SortOrder::Alphabetical, "Alphabetical", "A-Z by title"),
+    ];
+
+    /// Creates a new dialog with current filter/sort pre-selected.
+    pub fn new(current_filter: &Filter, current_sort: &SortOrder) -> Self {
+        let filter_index = Self::FILTERS
+            .iter()
+            .position(|(f, _, _)| std::mem::discriminant(f) == std::mem::discriminant(current_filter))
+            .unwrap_or(0);
+
+        let sort_index = Self::SORTS
+            .iter()
+            .position(|(s, _, _)| s == current_sort)
+            .unwrap_or(0);
+
+        Self {
+            section: FilterSortSection::Filter,
+            filter_index,
+            sort_index,
+        }
+    }
+
+    /// Returns the currently selected filter.
+    pub fn selected_filter(&self) -> Filter {
+        Self::FILTERS[self.filter_index].0.clone()
+    }
+
+    /// Returns the currently selected sort order.
+    pub fn selected_sort(&self) -> SortOrder {
+        Self::SORTS[self.sort_index].0
+    }
+
+    /// Handles a key event and returns the resulting action.
+    pub fn handle_key(&mut self, key: KeyEvent) -> DialogAction {
+        match key.code {
+            // Cancel
+            KeyCode::Esc | KeyCode::Char('q') => DialogAction::Cancel,
+
+            // Confirm selection
+            KeyCode::Enter => DialogAction::Submit,
+
+            // Switch between filter and sort sections
+            KeyCode::Tab | KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
+                self.section = match self.section {
+                    FilterSortSection::Filter => FilterSortSection::Sort,
+                    FilterSortSection::Sort => FilterSortSection::Filter,
+                };
+                DialogAction::None
+            }
+
+            // Navigate within section
+            KeyCode::Up | KeyCode::Char('k') => {
+                match self.section {
+                    FilterSortSection::Filter => {
+                        self.filter_index = self.filter_index.saturating_sub(1);
+                    }
+                    FilterSortSection::Sort => {
+                        self.sort_index = self.sort_index.saturating_sub(1);
+                    }
+                }
+                DialogAction::None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                match self.section {
+                    FilterSortSection::Filter => {
+                        self.filter_index = (self.filter_index + 1).min(Self::FILTERS.len() - 1);
+                    }
+                    FilterSortSection::Sort => {
+                        self.sort_index = (self.sort_index + 1).min(Self::SORTS.len() - 1);
+                    }
+                }
+                DialogAction::None
+            }
+
+            // Jump to top/bottom
+            KeyCode::Home | KeyCode::Char('g') => {
+                match self.section {
+                    FilterSortSection::Filter => self.filter_index = 0,
+                    FilterSortSection::Sort => self.sort_index = 0,
+                }
+                DialogAction::None
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                match self.section {
+                    FilterSortSection::Filter => self.filter_index = Self::FILTERS.len() - 1,
+                    FilterSortSection::Sort => self.sort_index = Self::SORTS.len() - 1,
+                }
+                DialogAction::None
+            }
+
+            _ => DialogAction::None,
+        }
+    }
+
+    /// Renders the dialog to the frame.
+    pub fn render(&self, frame: &mut Frame) {
+        let area = frame.area();
+
+        // Dialog dimensions
+        let dialog_width = 50.min(area.width.saturating_sub(4));
+        let dialog_height = 18.min(area.height.saturating_sub(4));
+        let dialog_area = centered_rect(dialog_width, dialog_height, area);
+
+        // Render background dim effect
+        frame.render_widget(Clear, area);
+        let dim_block = Block::default().style(Style::default().bg(Color::Black));
+        frame.render_widget(dim_block, area);
+
+        // Render dialog box
+        let block = Block::default()
+            .title(" Filter & Sort ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .style(Style::default().bg(Color::Black));
+
+        let inner = block.inner(dialog_area);
+        frame.render_widget(block, dialog_area);
+
+        // Split into two columns
+        let columns = Layout::horizontal([
+            Constraint::Percentage(55),
+            Constraint::Percentage(45),
+        ])
+        .split(inner);
+
+        // Render filter column
+        self.render_filter_column(frame, columns[0]);
+
+        // Render sort column
+        self.render_sort_column(frame, columns[1]);
+    }
+
+    fn render_filter_column(&self, frame: &mut Frame, area: Rect) {
+        let is_focused = self.section == FilterSortSection::Filter;
+        let border_style = if is_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let block = Block::default()
+            .title(" Filter ")
+            .borders(Borders::ALL)
+            .border_style(border_style);
+
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, (_, name, desc)) in Self::FILTERS.iter().enumerate() {
+            let is_selected = i == self.filter_index;
+            let style = if is_selected && is_focused {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let prefix = if is_selected { "▶ " } else { "  " };
+            lines.push(Line::from(vec![
+                Span::styled(prefix, style),
+                Span::styled(*name, style),
+            ]));
+
+            // Show description for selected item
+            if is_selected {
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", desc),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+
+        let paragraph = Paragraph::new(lines);
+        frame.render_widget(paragraph, inner);
+    }
+
+    fn render_sort_column(&self, frame: &mut Frame, area: Rect) {
+        let is_focused = self.section == FilterSortSection::Sort;
+        let border_style = if is_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+
+        let block = Block::default()
+            .title(" Sort ")
+            .borders(Borders::ALL)
+            .border_style(border_style);
+
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, (_, name, desc)) in Self::SORTS.iter().enumerate() {
+            let is_selected = i == self.sort_index;
+            let style = if is_selected && is_focused {
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_selected {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let prefix = if is_selected { "▶ " } else { "  " };
+            lines.push(Line::from(vec![
+                Span::styled(prefix, style),
+                Span::styled(*name, style),
+            ]));
+
+            // Show description for selected item
+            if is_selected {
+                lines.push(Line::from(Span::styled(
+                    format!("    {}", desc),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+
+        // Add help text at bottom
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Tab:switch  ↑↓:select  Enter:apply",
+            Style::default().fg(Color::DarkGray),
+        )));
+
+        let paragraph = Paragraph::new(lines);
+        frame.render_widget(paragraph, inner);
+    }
+}
+
+impl Default for FilterSortDialog {
+    fn default() -> Self {
+        Self::new(&Filter::All, &SortOrder::DueDateAsc)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::KeyModifiers;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn test_new_dialog() {
+        let dialog = FilterSortDialog::new(&Filter::Pending, &SortOrder::PriorityDesc);
+        assert_eq!(dialog.filter_index, 1); // Pending is index 1
+        assert_eq!(dialog.sort_index, 1); // PriorityDesc is index 1
+    }
+
+    #[test]
+    fn test_navigation_down() {
+        let mut dialog = FilterSortDialog::default();
+        assert_eq!(dialog.filter_index, 0);
+        dialog.handle_key(key(KeyCode::Down));
+        assert_eq!(dialog.filter_index, 1);
+    }
+
+    #[test]
+    fn test_navigation_up() {
+        let mut dialog = FilterSortDialog::new(&Filter::Completed, &SortOrder::DueDateAsc);
+        assert_eq!(dialog.filter_index, 2);
+        dialog.handle_key(key(KeyCode::Up));
+        assert_eq!(dialog.filter_index, 1);
+    }
+
+    #[test]
+    fn test_section_switch() {
+        let mut dialog = FilterSortDialog::default();
+        assert_eq!(dialog.section, FilterSortSection::Filter);
+        dialog.handle_key(key(KeyCode::Tab));
+        assert_eq!(dialog.section, FilterSortSection::Sort);
+        dialog.handle_key(key(KeyCode::Tab));
+        assert_eq!(dialog.section, FilterSortSection::Filter);
+    }
+
+    #[test]
+    fn test_escape_cancels() {
+        let mut dialog = FilterSortDialog::default();
+        assert_eq!(dialog.handle_key(key(KeyCode::Esc)), DialogAction::Cancel);
+    }
+
+    #[test]
+    fn test_enter_submits() {
+        let mut dialog = FilterSortDialog::default();
+        assert_eq!(dialog.handle_key(key(KeyCode::Enter)), DialogAction::Submit);
+    }
+}

@@ -173,13 +173,11 @@ fn map_normal_mode_key(key: KeyEvent, _app: &App) -> Option<Command> {
         KeyCode::Char('3') => Some(Command::FilterByPriority(Priority::High)),
         KeyCode::Char('4') => Some(Command::FilterByPriority(Priority::Urgent)),
 
-        // === Filter/Sort Cycling ===
-        KeyCode::Char('f') => Some(Command::CycleFilter),
-        KeyCode::Char('s') => Some(Command::CycleSort),
+        // === Filter/Sort ===
+        KeyCode::Char('f') => Some(Command::ShowFilterSort),
 
         // === Other ===
         KeyCode::Char('r') => Some(Command::Refresh),
-        KeyCode::Esc => Some(Command::ClearFilter),
 
         _ => None,
     }
@@ -474,10 +472,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_clear_filter_esc() {
+    async fn test_show_filter_sort_f() {
+        let app = setup_app().await;
+        let cmd = map_key_to_command(key(KeyCode::Char('f')), &app);
+        assert!(matches!(cmd, Some(Command::ShowFilterSort)));
+    }
+
+    #[tokio::test]
+    async fn test_esc_does_nothing_in_normal_mode() {
         let app = setup_app().await;
         let cmd = map_key_to_command(key(KeyCode::Esc), &app);
-        assert!(matches!(cmd, Some(Command::ClearFilter)));
+        assert!(cmd.is_none());
     }
 
     #[tokio::test]

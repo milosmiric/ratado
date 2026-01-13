@@ -12,7 +12,7 @@
 
 **Priority:** Critical
 **Estimate:** Medium
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -201,7 +201,7 @@ pub enum DialogAction {
 
 **Priority:** High
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -263,7 +263,7 @@ Command::EditTask => {
 
 **Priority:** High
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -352,7 +352,7 @@ impl ConfirmDialog {
 
 **Priority:** Critical
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -414,7 +414,7 @@ Command::ToggleTaskStatus => {
 
 **Priority:** Medium
 **Estimate:** Small
-**Status:** [ ] Not Started
+**Status:** [x] Complete
 
 ### Description
 
@@ -474,15 +474,15 @@ Command::CyclePriority => {
 
 Before moving to Phase 6, ensure:
 
-- [ ] All 5 stories completed
-- [ ] Can add new tasks via dialog
-- [ ] Can edit existing tasks
-- [ ] Can delete tasks with confirmation
-- [ ] Spacebar toggles completion
-- [ ] `p` cycles priority
-- [ ] All changes persist to database
-- [ ] UI updates reflect changes
-- [ ] All unit/integration tests pass
+- [x] All 5 stories completed
+- [x] Can add new tasks via dialog
+- [x] Can edit existing tasks
+- [x] Can delete tasks with confirmation
+- [x] Spacebar toggles completion
+- [x] `p` cycles priority
+- [x] All changes persist to database
+- [x] UI updates reflect changes
+- [x] All unit/integration tests pass
 
 ---
 
@@ -501,3 +501,84 @@ Before moving to Phase 6, ensure:
 - Data persists to database
 
 Phases 6-12 add polish and additional features.
+
+---
+
+## Post-MVP Enhancements
+
+Additional improvements made after initial MVP completion:
+
+### Story 5.6: Enhanced Date Input
+
+**Status:** [x] Complete
+
+Improved due date input with text shortcuts and visual calendar picker.
+
+#### Implemented Features
+
+- **Text shortcuts** in due date field:
+  - `today`, `tod`, `tomorrow`, `tom`, `yesterday`
+  - `+1d`, `+3d`, `+1w`, `+2w` (relative days/weeks)
+  - `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun` (next weekday)
+  - `next week`, `next month`
+  - `YYYY-MM-DD`, `MM/DD`, `DD/MM` formats
+
+- **Calendar picker** (`src/ui/date_picker.rs`):
+  - Press `c` in due date field to open visual calendar
+  - Arrow keys to navigate days
+  - `PgUp`/`PgDn` for month navigation
+  - `t` to jump to today
+  - `Enter` to select, `Esc` to cancel
+  - Monday-Sunday week layout
+  - Highlights today (cyan) and selected date (yellow)
+
+- **Placeholder text** shows available formats: `today, +1d, mon, c=calendar`
+
+---
+
+### Story 5.7: Status Message Auto-Clear
+
+**Status:** [x] Complete
+
+Status messages now auto-clear after 3 seconds instead of persisting forever.
+
+#### Implementation
+
+- Added `status_message_set_at: Option<Instant>` to App state
+- `set_status()` records timestamp when message is set
+- `on_tick()` checks elapsed time and clears after `STATUS_MESSAGE_TIMEOUT_SECS` (3 seconds)
+
+---
+
+### Story 5.8: Filter/Sort Dialog
+
+**Status:** [x] Complete
+
+Replaced cycling filter/sort with a popup dialog for better discoverability.
+
+#### Implemented Features
+
+- **FilterSortDialog** (`src/ui/dialogs/filter_sort.rs`):
+  - Press `f` to open two-column popup
+  - Left column: Filter options (All, Pending, Completed, Due Today, etc.)
+  - Right column: Sort options (Due Date, Priority, Created, Alphabetical)
+  - `j/k` or arrows to navigate within column
+  - `Tab` or `h/l` to switch columns
+  - `Enter` to apply, `Esc` to cancel
+  - Shows description for selected option
+
+- **Removed**:
+  - `CycleFilter` and `CycleSort` commands
+  - `ClearFilter` command
+  - `s` keybinding (sort now in popup)
+  - `Esc` no longer clears filter in normal mode
+
+- **Quick filter shortcuts still available**:
+  - `T` - Due Today
+  - `W` - Due This Week
+  - `1-4` - Filter by priority
+
+#### Updated UI
+
+- **Help screen** (`?`): Added FILTERS & SORT section documenting all shortcuts
+- **Status bar**: Updated to show `f Filter/Sort` instead of separate `f`/`s`
