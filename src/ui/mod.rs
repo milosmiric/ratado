@@ -17,6 +17,7 @@
 //! - [`tag_input`] - Tag input widget with autocomplete
 //! - [`date_picker`] - Calendar date picker widget
 //! - [`description_textarea`] - Multi-line textarea with link support
+//! - [`search`] - Search view for finding tasks
 
 pub mod date_picker;
 mod debug;
@@ -26,6 +27,7 @@ mod header;
 mod help;
 pub mod input;
 mod layout;
+pub mod search;
 mod sidebar;
 mod status_bar;
 pub mod tag_input;
@@ -45,6 +47,15 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Main => layout::render_main_view(frame, app, frame.area()),
         View::Help => help::render_help(frame, app, frame.area()),
         View::DebugLogs => debug::render_debug_logs(frame, app, frame.area()),
+        View::Search => search::render_search_with_context(
+            frame,
+            &app.input_buffer,
+            app.input_cursor,
+            &app.search_results,
+            app.selected_search_index,
+            frame.area(),
+            Some(app.selected_project_name()),
+        ),
         // Other views fall back to main for now
         _ => layout::render_main_view(frame, app, frame.area()),
     }

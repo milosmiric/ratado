@@ -11,6 +11,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FocusPanel, InputMode};
+use crate::models::Filter;
 
 /// Renders the status bar.
 pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
@@ -39,7 +40,7 @@ fn render_normal_mode_hints(app: &App) -> Line<'static> {
     // Context-sensitive hints based on focus
     match app.focus {
         FocusPanel::Sidebar => render_sidebar_hints(app),
-        FocusPanel::TaskList => render_tasklist_hints(),
+        FocusPanel::TaskList => render_tasklist_hints(app),
     }
 }
 
@@ -60,19 +61,50 @@ fn render_sidebar_hints(_app: &App) -> Line<'static> {
 }
 
 /// Renders hints when task list is focused.
-fn render_tasklist_hints() -> Line<'static> {
-    Line::from(vec![
+fn render_tasklist_hints(app: &App) -> Line<'static> {
+    let mut spans = vec![
         Span::styled(" a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Add  ", Style::default().fg(Color::DarkGray)),
         Span::styled("e", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Edit  ", Style::default().fg(Color::DarkGray)),
         Span::styled("Space", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Done  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("/", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(" Search  ", Style::default().fg(Color::DarkGray)),
         Span::styled("f", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Filter  ", Style::default().fg(Color::DarkGray)),
         Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled(" Help", Style::default().fg(Color::DarkGray)),
-    ])
+    ];
+
+    // Add filter indicator if not default
+    let filter_name = filter_display_name(&app.filter);
+    if !filter_name.is_empty() {
+        spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            format!("Filter: {}", filter_name),
+            Style::default().fg(Color::Magenta),
+        ));
+    }
+
+    Line::from(spans)
+}
+
+/// Returns a display name for the filter.
+fn filter_display_name(filter: &Filter) -> String {
+    match filter {
+        Filter::Pending => String::new(), // Default, don't show
+        Filter::All => "All".to_string(),
+        Filter::Completed => "Completed".to_string(),
+        Filter::InProgress => "In Progress".to_string(),
+        Filter::Archived => "Archived".to_string(),
+        Filter::DueToday => "Due Today".to_string(),
+        Filter::DueThisWeek => "Due This Week".to_string(),
+        Filter::Overdue => "Overdue".to_string(),
+        Filter::ByProject(id) => format!("Project: {}", id),
+        Filter::ByTag(tag) => format!("Tag: {}", tag),
+        Filter::ByPriority(p) => format!("Priority: {:?}", p),
+    }
 }
 
 /// Renders hints for editing mode.

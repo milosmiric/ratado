@@ -33,8 +33,9 @@ use log::debug;
 use tui_logger::TuiWidgetEvent;
 
 use crate::app::{App, AppError, FocusPanel, InputMode, View};
-use crate::models::{Filter, Priority};
+use crate::models::{Filter, Priority, Task};
 use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog};
+use crate::ui::search::search_tasks;
 
 /// All possible commands that can be executed in the application.
 ///
@@ -94,6 +95,12 @@ pub enum Command {
     ShowCalendar,
     /// Enter search mode
     ShowSearch,
+    /// Navigate up in search results
+    SearchNavigateUp,
+    /// Navigate down in search results
+    SearchNavigateDown,
+    /// Select the current search result
+    SearchSelectTask,
     /// Toggle the debug logs view
     ShowDebugLogs,
     /// Show detailed view of selected task
@@ -445,6 +452,59 @@ impl Command {
                 app.input_mode = InputMode::Search;
                 app.input_buffer.clear();
                 app.input_cursor = 0;
+                app.search_results.clear();
+                app.selected_search_index = 0;
+                let project_name = app.selected_project_name().to_string();
+                if project_name != "All Tasks" {
+                    app.set_status(format!("Searching in: {}", project_name));
+                }
+                Ok(true)
+            }
+
+            Command::SearchNavigateUp => {
+                if !app.search_results.is_empty() {
+                    app.selected_search_index = app.selected_search_index.saturating_sub(1);
+                }
+                Ok(true)
+            }
+
+            Command::SearchNavigateDown => {
+                if !app.search_results.is_empty() {
+                    app.selected_search_index =
+                        (app.selected_search_index + 1).min(app.search_results.len() - 1);
+                }
+                Ok(true)
+            }
+
+            Command::SearchSelectTask => {
+                if let Some(result) = app.search_results.get(app.selected_search_index) {
+                    // Find the task index in visible_tasks and select it
+                    let task_id = result.task.id.clone();
+                    app.current_view = View::Main;
+                    app.input_mode = InputMode::Normal;
+                    app.input_buffer.clear();
+                    app.input_cursor = 0;
+
+                    // Try to find and select the task
+                    if let Some(idx) = app
+                        .visible_tasks()
+                        .iter()
+                        .position(|t| t.id == task_id)
+                    {
+                        app.selected_task_index = Some(idx);
+                    } else {
+                        // Task might not be visible due to filters, clear filter
+                        app.filter = Filter::All;
+                        if let Some(idx) = app
+                            .visible_tasks()
+                            .iter()
+                            .position(|t| t.id == task_id)
+                        {
+                            app.selected_task_index = Some(idx);
+                        }
+                    }
+                    app.set_status(format!("Selected: {}", result.task.title));
+                }
                 Ok(true)
             }
 
@@ -474,9 +534,12 @@ impl Command {
             }
 
             Command::ShowFilterSort => {
+                // Use project-scoped tasks for filter counts
+                let project_tasks: Vec<Task> = app.project_tasks().into_iter().cloned().collect();
                 app.dialog = Some(Dialog::FilterSort(FilterSortDialog::new(
                     &app.filter,
                     &app.sort,
+                    &project_tasks,
                 )));
                 Ok(true)
             }
@@ -545,6 +608,12 @@ impl Command {
             }
 
             Command::CancelInput => {
+                // Return to main view if in search
+                if app.current_view == View::Search {
+                    app.current_view = View::Main;
+                    app.search_results.clear();
+                    app.selected_search_index = 0;
+                }
                 app.input_mode = InputMode::Normal;
                 app.input_buffer.clear();
                 app.input_cursor = 0;
@@ -557,6 +626,12 @@ impl Command {
             Command::InsertChar(c) => {
                 app.input_buffer.insert(app.input_cursor, c);
                 app.input_cursor += 1;
+                // Update search results if in search mode (scoped to current project)
+                if app.input_mode == InputMode::Search {
+                    let project_tasks: Vec<Task> = app.project_tasks().into_iter().cloned().collect();
+                    app.search_results = search_tasks(&app.input_buffer, &project_tasks);
+                    app.selected_search_index = 0;
+                }
                 Ok(true)
             }
 
@@ -564,6 +639,12 @@ impl Command {
                 if app.input_cursor > 0 {
                     app.input_cursor -= 1;
                     app.input_buffer.remove(app.input_cursor);
+                    // Update search results if in search mode (scoped to current project)
+                    if app.input_mode == InputMode::Search {
+                        let project_tasks: Vec<Task> = app.project_tasks().into_iter().cloned().collect();
+                        app.search_results = search_tasks(&app.input_buffer, &project_tasks);
+                        app.selected_search_index = 0;
+                    }
                 }
                 Ok(true)
             }

@@ -33,6 +33,7 @@ use tui_logger::TuiWidgetState;
 use crate::models::{Filter, Priority, Project, SortOrder, Task, TaskStatus};
 use crate::storage::{Database, StorageError, Tag};
 use crate::ui::dialogs::Dialog;
+use crate::ui::search::SearchResult;
 
 /// How long status messages are displayed before auto-clearing (in seconds).
 const STATUS_MESSAGE_TIMEOUT_SECS: u64 = 3;
@@ -159,6 +160,12 @@ pub struct App {
 
     /// Currently active dialog (if any)
     pub dialog: Option<Dialog>,
+
+    /// Search results (populated when in search view)
+    pub search_results: Vec<SearchResult>,
+
+    /// Selected index in search results
+    pub selected_search_index: usize,
 }
 
 impl App {
@@ -198,6 +205,8 @@ impl App {
             status_message_set_at: None,
             editing_task: None,
             dialog: None,
+            search_results: Vec::new(),
+            selected_search_index: 0,
         };
         app.load_data().await?;
         Ok(app)
@@ -270,6 +279,36 @@ impl App {
     pub fn selected_task(&self) -> Option<&Task> {
         let tasks = self.visible_tasks();
         self.selected_task_index.and_then(|idx| tasks.get(idx).copied())
+    }
+
+    /// Returns tasks filtered by the currently selected project.
+    ///
+    /// This is useful for search and filter counts that should be
+    /// scoped to the current project context.
+    pub fn project_tasks(&self) -> Vec<&Task> {
+        if self.selected_project_index == 0 {
+            // "All Tasks" - return all tasks
+            self.tasks.iter().collect()
+        } else if let Some(project) = self.projects.get(self.selected_project_index - 1) {
+            // Specific project selected
+            self.tasks
+                .iter()
+                .filter(|t| t.project_id.as_ref() == Some(&project.id))
+                .collect()
+        } else {
+            self.tasks.iter().collect()
+        }
+    }
+
+    /// Returns the name of the currently selected project for display.
+    pub fn selected_project_name(&self) -> &str {
+        if self.selected_project_index == 0 {
+            "All Tasks"
+        } else if let Some(project) = self.projects.get(self.selected_project_index - 1) {
+            &project.name
+        } else {
+            "All Tasks"
+        }
     }
 
     /// Returns the currently selected project, if any.

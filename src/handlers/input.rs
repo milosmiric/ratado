@@ -245,6 +245,8 @@ fn map_search_mode_key(key: KeyEvent) -> Option<Command> {
         return match key.code {
             KeyCode::Char('a') => Some(Command::MoveCursorStart),
             KeyCode::Char('e') => Some(Command::MoveCursorEnd),
+            KeyCode::Char('n') => Some(Command::SearchNavigateDown),
+            KeyCode::Char('p') => Some(Command::SearchNavigateUp),
             _ => None,
         };
     }
@@ -252,14 +254,19 @@ fn map_search_mode_key(key: KeyEvent) -> Option<Command> {
     match key.code {
         // Exit search
         KeyCode::Esc => Some(Command::CancelInput),
-        KeyCode::Enter => Some(Command::SubmitInput),
+        // Select current search result
+        KeyCode::Enter => Some(Command::SearchSelectTask),
 
-        // Text editing (same as editing mode)
+        // Navigate search results
+        KeyCode::Down => Some(Command::SearchNavigateDown),
+        KeyCode::Up => Some(Command::SearchNavigateUp),
+
+        // Text editing
         KeyCode::Char(c) => Some(Command::InsertChar(c)),
         KeyCode::Backspace => Some(Command::DeleteCharBackward),
         KeyCode::Delete => Some(Command::DeleteCharForward),
 
-        // Cursor movement
+        // Cursor movement within search text
         KeyCode::Left => Some(Command::MoveCursorLeft),
         KeyCode::Right => Some(Command::MoveCursorRight),
         KeyCode::Home => Some(Command::MoveCursorStart),

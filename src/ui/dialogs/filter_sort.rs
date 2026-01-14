@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::models::{Filter, SortOrder};
+use crate::models::{Filter, SortOrder, Task};
 use crate::ui::dialogs::{centered_rect, DialogAction};
 
 /// Which section of the dialog is focused.
@@ -31,6 +31,8 @@ pub struct FilterSortDialog {
     pub filter_index: usize,
     /// Selected sort index
     pub sort_index: usize,
+    /// Task counts for each filter option
+    pub filter_counts: Vec<usize>,
 }
 
 impl FilterSortDialog {
@@ -57,7 +59,7 @@ impl FilterSortDialog {
     ];
 
     /// Creates a new dialog with current filter/sort pre-selected.
-    pub fn new(current_filter: &Filter, current_sort: &SortOrder) -> Self {
+    pub fn new(current_filter: &Filter, current_sort: &SortOrder, tasks: &[Task]) -> Self {
         let filter_index = Self::FILTERS
             .iter()
             .position(|(f, _, _)| std::mem::discriminant(f) == std::mem::discriminant(current_filter))
@@ -68,11 +70,23 @@ impl FilterSortDialog {
             .position(|(s, _, _)| s == current_sort)
             .unwrap_or(0);
 
+        // Calculate counts for each filter
+        let filter_counts = Self::FILTERS
+            .iter()
+            .map(|(filter, _, _)| Self::count_matching_tasks(filter, tasks))
+            .collect();
+
         Self {
             section: FilterSortSection::Filter,
             filter_index,
             sort_index,
+            filter_counts,
         }
+    }
+
+    /// Counts how many tasks match a given filter.
+    fn count_matching_tasks(filter: &Filter, tasks: &[Task]) -> usize {
+        tasks.iter().filter(|t| filter.matches(t)).count()
     }
 
     /// Returns the currently selected filter.
@@ -204,6 +218,7 @@ impl FilterSortDialog {
         let mut lines: Vec<Line> = Vec::new();
         for (i, (_, name, desc)) in Self::FILTERS.iter().enumerate() {
             let is_selected = i == self.filter_index;
+            let count = self.filter_counts.get(i).copied().unwrap_or(0);
             let style = if is_selected && is_focused {
                 Style::default()
                     .fg(Color::Black)
@@ -217,10 +232,17 @@ impl FilterSortDialog {
                 Style::default().fg(Color::White)
             };
 
+            let count_style = if is_selected && is_focused {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
             let prefix = if is_selected { "▶ " } else { "  " };
             lines.push(Line::from(vec![
                 Span::styled(prefix, style),
                 Span::styled(*name, style),
+                Span::styled(format!(" ({})", count), count_style),
             ]));
 
             // Show description for selected item
@@ -297,7 +319,7 @@ impl FilterSortDialog {
 
 impl Default for FilterSortDialog {
     fn default() -> Self {
-        Self::new(&Filter::All, &SortOrder::DueDateAsc)
+        Self::new(&Filter::All, &SortOrder::DueDateAsc, &[])
     }
 }
 
@@ -312,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_new_dialog() {
-        let dialog = FilterSortDialog::new(&Filter::Pending, &SortOrder::PriorityDesc);
+        let dialog = FilterSortDialog::new(&Filter::Pending, &SortOrder::PriorityDesc, &[]);
         assert_eq!(dialog.filter_index, 1); // Pending is index 1
         assert_eq!(dialog.sort_index, 1); // PriorityDesc is index 1
     }
@@ -327,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_navigation_up() {
-        let mut dialog = FilterSortDialog::new(&Filter::Completed, &SortOrder::DueDateAsc);
+        let mut dialog = FilterSortDialog::new(&Filter::Completed, &SortOrder::DueDateAsc, &[]);
         assert_eq!(dialog.filter_index, 2);
         dialog.handle_key(key(KeyCode::Up));
         assert_eq!(dialog.filter_index, 1);

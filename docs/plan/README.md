@@ -57,7 +57,7 @@ Update this section as phases are completed:
 - [x] Phase 4: Input Handling
 - [x] Phase 5: Task Operations (MVP Complete!)
 - [x] Phase 6: Projects & Tags
-- [ ] Phase 7: Filtering & Search
+- [x] Phase 7: Filtering & Search
 - [ ] Phase 8: Additional Views
 - [ ] Phase 9: Notifications
 - [ ] Phase 10: CLI Interface
