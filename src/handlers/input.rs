@@ -248,6 +248,9 @@ fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
         // === Filter/Sort ===
         KeyCode::Char('f') => Some(Command::ShowFilterSort),
 
+        // === Settings ===
+        KeyCode::Char('S') => Some(Command::ShowSettings),
+
         // === Other ===
         KeyCode::Char('r') => Some(Command::Refresh),
 

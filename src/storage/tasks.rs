@@ -250,6 +250,52 @@ impl Database {
         Ok(rows_affected as usize)
     }
 
+    /// Deletes all completed tasks from the database.
+    ///
+    /// Also cleans up any orphaned tags (tags no longer associated with any tasks).
+    ///
+    /// # Returns
+    ///
+    /// The number of tasks deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the delete fails.
+    pub async fn delete_completed_tasks(&self) -> Result<usize> {
+        // Tags associations are deleted automatically via ON DELETE CASCADE
+        let rows_affected = self
+            .execute("DELETE FROM tasks WHERE status = 'completed'", ())
+            .await?;
+
+        // Clean up any tags that are no longer associated with any tasks
+        self.cleanup_orphaned_tags().await?;
+
+        Ok(rows_affected as usize)
+    }
+
+    /// Resets the database by deleting all tasks.
+    ///
+    /// Also cleans up all tags.
+    ///
+    /// # Returns
+    ///
+    /// The number of tasks deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the delete fails.
+    pub async fn delete_all_tasks(&self) -> Result<usize> {
+        // Tags associations are deleted automatically via ON DELETE CASCADE
+        let rows_affected = self
+            .execute("DELETE FROM tasks", ())
+            .await?;
+
+        // Clean up all orphaned tags
+        self.cleanup_orphaned_tags().await?;
+
+        Ok(rows_affected as usize)
+    }
+
     /// Queries tasks with filtering and sorting.
     ///
     /// # Arguments

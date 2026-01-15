@@ -34,7 +34,7 @@ use tui_logger::TuiWidgetEvent;
 
 use crate::app::{App, AppError, FocusPanel, InputMode, View};
 use crate::models::{Filter, Priority, Task};
-use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog, SettingsDialog};
 use crate::ui::search::search_tasks;
 
 /// All possible commands that can be executed in the application.
@@ -119,6 +119,10 @@ pub enum Command {
     CalendarToday,
     /// Select tasks for the current calendar day
     CalendarSelectDay,
+
+    // === Settings ===
+    /// Show the settings dialog
+    ShowSettings,
 
     // === Filters ===
     /// Set a specific filter
@@ -532,6 +536,8 @@ impl Command {
                     app.input_mode = InputMode::Normal;
                     app.input_buffer.clear();
                     app.input_cursor = 0;
+                    // Focus the task list panel
+                    app.focus = FocusPanel::TaskList;
 
                     // Try to find and select the task
                     if let Some(idx) = app
@@ -589,6 +595,11 @@ impl Command {
                     &app.sort,
                     &project_tasks,
                 )));
+                Ok(true)
+            }
+
+            Command::ShowSettings => {
+                app.dialog = Some(Dialog::Settings(SettingsDialog::new()));
                 Ok(true)
             }
 

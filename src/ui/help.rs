@@ -86,8 +86,16 @@ pub fn render_help(frame: &mut Frame, _app: &App, area: Rect) {
         Line::from(""),
         keybinding_line("?", "Show this help"),
         keybinding_line("F12", "Toggle debug logs"),
+        keybinding_line("S", "Settings"),
         keybinding_line("r", "Refresh data"),
         keybinding_line("q", "Quit"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Ratado v0.1.0", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("  Created by Miloš Mirić", Style::default().fg(Color::DarkGray)),
+        ]),
         Line::from(""),
         Line::from(vec![
             Span::styled("  Press any key to close", Style::default().fg(Color::DarkGray)),

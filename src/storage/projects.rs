@@ -161,6 +161,24 @@ impl Database {
         Ok(rows_affected > 0)
     }
 
+    /// Deletes all projects except Inbox.
+    ///
+    /// Used when resetting the database to default state.
+    ///
+    /// # Returns
+    ///
+    /// The number of projects deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the delete fails.
+    pub async fn delete_all_projects_except_inbox(&self) -> Result<usize> {
+        let rows_affected = self
+            .execute("DELETE FROM projects WHERE id != 'inbox'", ())
+            .await?;
+        Ok(rows_affected as usize)
+    }
+
     /// Gets the count of tasks in a project.
     ///
     /// # Arguments

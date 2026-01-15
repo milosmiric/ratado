@@ -24,6 +24,7 @@ mod delete_project;
 mod filter_sort;
 mod move_to_project;
 mod project;
+mod settings;
 
 pub use add_task::AddTaskDialog;
 pub use confirm::ConfirmDialog;
@@ -31,6 +32,7 @@ pub use delete_project::{DeleteProjectChoice, DeleteProjectDialog};
 pub use filter_sort::FilterSortDialog;
 pub use move_to_project::MoveToProjectDialog;
 pub use project::ProjectDialog;
+pub use settings::{SettingsDialog, SettingsOption};
 
 use ratatui::{
     buffer::Buffer,
@@ -66,6 +68,8 @@ pub enum Dialog {
     MoveToProject(MoveToProjectDialog),
     /// Add or edit project dialog
     Project(ProjectDialog),
+    /// Settings dialog for app configuration
+    Settings(SettingsDialog),
 }
 
 impl Dialog {
@@ -78,6 +82,7 @@ impl Dialog {
             Dialog::FilterSort(dialog) => dialog.render(frame),
             Dialog::MoveToProject(dialog) => dialog.render(frame),
             Dialog::Project(dialog) => dialog.render(frame),
+            Dialog::Settings(dialog) => dialog.render(frame),
         }
     }
 }

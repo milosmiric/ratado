@@ -136,11 +136,24 @@ fn render_task_row(
         Priority::Low => Style::default().fg(Color::DarkGray),
     };
 
-    // Due date
-    let due_str = task
-        .due_date
-        .map(format_relative_date)
-        .unwrap_or_default();
+    // Date string - for completed tasks show both due date and completion date if available
+    let date_str = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
+        let done_str = task.completed_at
+            .map(|d| format!("✓ {}", format_relative_date(d)));
+        let due_str = task.due_date
+            .map(|d| format!("Due {}", format_relative_date(d)));
+
+        match (due_str, done_str) {
+            (Some(due), Some(done)) => format!("{} · {}", due, done),
+            (None, Some(done)) => done,
+            (Some(due), None) => due,
+            (None, None) => String::new(),
+        }
+    } else {
+        task.due_date
+            .map(format_relative_date)
+            .unwrap_or_default()
+    };
 
     // Format tags string
     let tags_str = render_tags(&task.tags, 20);
@@ -150,7 +163,7 @@ fn render_task_row(
 
     // Calculate available width for title
     // Format: "  [ ] !! Title...  @Project  #tags  Due Date"
-    let fixed_width = 3 + 3 + 3 + project_str.len() + 1 + tags_str.len() + 2 + due_str.len() + 2;
+    let fixed_width = 3 + 3 + 3 + project_str.len() + 1 + tags_str.len() + 2 + date_str.len() + 2;
     let title_width = (width as usize).saturating_sub(fixed_width).max(10);
 
     // Truncate title if needed
@@ -205,7 +218,7 @@ fn render_task_row(
         ));
     }
 
-    spans.push(Span::styled(format!("  {}", due_str), row_style.fg(Color::DarkGray)));
+    spans.push(Span::styled(format!("  {}", date_str), row_style.fg(Color::DarkGray)));
 
     ListItem::new(Line::from(spans))
 }

@@ -50,7 +50,7 @@ use crossterm::event::KeyEvent;
 use log::debug;
 
 use crate::app::{App, AppError};
-use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction};
+use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction, SettingsOption};
 
 /// Handles an application event and updates state accordingly.
 ///
@@ -281,6 +281,46 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                 DialogAction::None => {
                     // Keep the dialog open
                     app.dialog = Some(Dialog::MoveToProject(move_dialog));
+                }
+            }
+        }
+        Some(Dialog::Settings(mut settings_dialog)) => {
+            let action = settings_dialog.handle_key(key);
+            match action {
+                DialogAction::Submit => {
+                    // Execute the confirmed action
+                    if let Some(option) = settings_dialog.confirmed_option() {
+                        match option {
+                            SettingsOption::DeleteCompletedTasks => {
+                                let count = app.db.delete_completed_tasks().await?;
+                                app.load_data().await?;
+                                app.set_status(format!("Deleted {} completed task(s)", count));
+                            }
+                            SettingsOption::ResetDatabase => {
+                                // Delete all tasks first
+                                let task_count = app.db.delete_all_tasks().await?;
+                                // Delete all projects except Inbox
+                                let project_count = app.db.delete_all_projects_except_inbox().await?;
+                                app.load_data().await?;
+                                // Reset selection
+                                app.selected_task_index = None;
+                                app.selected_project_index = 0;
+                                app.set_status(format!(
+                                    "Database reset: deleted {} task(s) and {} project(s)",
+                                    task_count, project_count
+                                ));
+                            }
+                        }
+                    }
+                    // Dialog closed
+                }
+                DialogAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                DialogAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::Settings(settings_dialog));
                 }
             }
         }
