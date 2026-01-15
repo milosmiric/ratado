@@ -66,6 +66,8 @@ pub fn map_key_to_command(key: KeyEvent, app: &App) -> Option<Command> {
     match app.current_view {
         View::Help => return map_help_view_key(key),
         View::DebugLogs => return map_debug_view_key(key),
+        View::Calendar => return map_calendar_view_key(key),
+        View::TaskDetail => return map_task_detail_view_key(key),
         View::Search => {
             // In search view, handle search-specific keys
             if app.input_mode == InputMode::Search {
@@ -116,6 +118,56 @@ fn map_debug_view_key(key: KeyEvent) -> Option<Command> {
         }
         KeyCode::Char('-') => Some(Command::LoggerEvent(TuiLoggerEvent::Minus)),
         KeyCode::Char('H') => Some(Command::LoggerEvent(TuiLoggerEvent::Hide)),
+
+        _ => None,
+    }
+}
+
+/// Maps keys in the Calendar view.
+///
+/// Handles navigation between days and weeks.
+fn map_calendar_view_key(key: KeyEvent) -> Option<Command> {
+    match key.code {
+        // Escape returns to main view
+        KeyCode::Esc => Some(Command::ShowMain),
+
+        // Day navigation
+        KeyCode::Left | KeyCode::Char('h') => Some(Command::CalendarPrevDay),
+        KeyCode::Right | KeyCode::Char('l') => Some(Command::CalendarNextDay),
+
+        // Week navigation (using j/k for up/down since they're intuitive)
+        KeyCode::Up | KeyCode::Char('k') => Some(Command::CalendarPrevWeek),
+        KeyCode::Down | KeyCode::Char('j') => Some(Command::CalendarNextWeek),
+
+        // Jump to today
+        KeyCode::Char('t') => Some(Command::CalendarToday),
+
+        // Select current day and return to main
+        KeyCode::Enter => Some(Command::CalendarSelectDay),
+
+        // Quit
+        KeyCode::Char('q') => Some(Command::Quit),
+
+        _ => None,
+    }
+}
+
+/// Maps keys in the Task Detail view.
+///
+/// Handles quick actions on the displayed task.
+fn map_task_detail_view_key(key: KeyEvent) -> Option<Command> {
+    match key.code {
+        // Escape returns to main view
+        KeyCode::Esc => Some(Command::ShowMain),
+
+        // Quick task actions
+        KeyCode::Char(' ') => Some(Command::ToggleTaskStatus),
+        KeyCode::Char('p') => Some(Command::CyclePriority),
+        KeyCode::Char('e') | KeyCode::Enter => Some(Command::EditTask),
+        KeyCode::Char('d') => Some(Command::DeleteTask),
+
+        // Quit
+        KeyCode::Char('q') => Some(Command::Quit),
 
         _ => None,
     }
@@ -662,5 +714,126 @@ mod tests {
 
         let cmd = map_key_to_command(key(KeyCode::Esc), &app);
         assert!(matches!(cmd, Some(Command::CancelInput)));
+    }
+
+    // === Calendar View Tests ===
+
+    #[tokio::test]
+    async fn test_calendar_view_esc_returns() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Esc), &app);
+        assert!(matches!(cmd, Some(Command::ShowMain)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_left_prev_day() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Left), &app);
+        assert!(matches!(cmd, Some(Command::CalendarPrevDay)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_right_next_day() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Right), &app);
+        assert!(matches!(cmd, Some(Command::CalendarNextDay)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_up_prev_week() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Up), &app);
+        assert!(matches!(cmd, Some(Command::CalendarPrevWeek)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_down_next_week() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Down), &app);
+        assert!(matches!(cmd, Some(Command::CalendarNextWeek)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_t_today() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Char('t')), &app);
+        assert!(matches!(cmd, Some(Command::CalendarToday)));
+    }
+
+    #[tokio::test]
+    async fn test_calendar_view_vim_navigation() {
+        let mut app = setup_app().await;
+        app.current_view = View::Calendar;
+
+        let cmd = map_key_to_command(key(KeyCode::Char('h')), &app);
+        assert!(matches!(cmd, Some(Command::CalendarPrevDay)));
+
+        let cmd = map_key_to_command(key(KeyCode::Char('l')), &app);
+        assert!(matches!(cmd, Some(Command::CalendarNextDay)));
+
+        let cmd = map_key_to_command(key(KeyCode::Char('j')), &app);
+        assert!(matches!(cmd, Some(Command::CalendarNextWeek)));
+
+        let cmd = map_key_to_command(key(KeyCode::Char('k')), &app);
+        assert!(matches!(cmd, Some(Command::CalendarPrevWeek)));
+    }
+
+    // === Task Detail View Tests ===
+
+    #[tokio::test]
+    async fn test_task_detail_view_esc_returns() {
+        let mut app = setup_app().await;
+        app.current_view = View::TaskDetail;
+
+        let cmd = map_key_to_command(key(KeyCode::Esc), &app);
+        assert!(matches!(cmd, Some(Command::ShowMain)));
+    }
+
+    #[tokio::test]
+    async fn test_task_detail_view_space_toggles() {
+        let mut app = setup_app().await;
+        app.current_view = View::TaskDetail;
+
+        let cmd = map_key_to_command(key(KeyCode::Char(' ')), &app);
+        assert!(matches!(cmd, Some(Command::ToggleTaskStatus)));
+    }
+
+    #[tokio::test]
+    async fn test_task_detail_view_p_cycles_priority() {
+        let mut app = setup_app().await;
+        app.current_view = View::TaskDetail;
+
+        let cmd = map_key_to_command(key(KeyCode::Char('p')), &app);
+        assert!(matches!(cmd, Some(Command::CyclePriority)));
+    }
+
+    #[tokio::test]
+    async fn test_task_detail_view_e_edits() {
+        let mut app = setup_app().await;
+        app.current_view = View::TaskDetail;
+
+        let cmd = map_key_to_command(key(KeyCode::Char('e')), &app);
+        assert!(matches!(cmd, Some(Command::EditTask)));
+    }
+
+    #[tokio::test]
+    async fn test_task_detail_view_d_deletes() {
+        let mut app = setup_app().await;
+        app.current_view = View::TaskDetail;
+
+        let cmd = map_key_to_command(key(KeyCode::Char('d')), &app);
+        assert!(matches!(cmd, Some(Command::DeleteTask)));
     }
 }

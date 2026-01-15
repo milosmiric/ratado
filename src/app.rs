@@ -32,6 +32,7 @@ use tui_logger::TuiWidgetState;
 
 use crate::models::{Filter, Priority, Project, SortOrder, Task, TaskStatus};
 use crate::storage::{Database, StorageError, Tag};
+use crate::ui::calendar::CalendarState;
 use crate::ui::dialogs::Dialog;
 use crate::ui::search::SearchResult;
 
@@ -166,6 +167,9 @@ pub struct App {
 
     /// Selected index in search results
     pub selected_search_index: usize,
+
+    /// Calendar view state
+    pub calendar_state: CalendarState,
 }
 
 impl App {
@@ -207,6 +211,7 @@ impl App {
             dialog: None,
             search_results: Vec::new(),
             selected_search_index: 0,
+            calendar_state: CalendarState::new(),
         };
         app.load_data().await?;
         Ok(app)

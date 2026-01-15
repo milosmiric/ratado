@@ -18,7 +18,10 @@
 //! - [`date_picker`] - Calendar date picker widget
 //! - [`description_textarea`] - Multi-line textarea with link support
 //! - [`search`] - Search view for finding tasks
+//! - [`task_detail`] - Task detail view
+//! - [`calendar`] - Weekly calendar view
 
+pub mod calendar;
 pub mod date_picker;
 mod debug;
 pub mod description_textarea;
@@ -31,6 +34,7 @@ pub mod search;
 mod sidebar;
 mod status_bar;
 pub mod tag_input;
+mod task_detail;
 pub mod task_list;
 
 use ratatui::Frame;
@@ -56,8 +60,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
             frame.area(),
             Some(app.selected_project_name()),
         ),
-        // Other views fall back to main for now
-        _ => layout::render_main_view(frame, app, frame.area()),
+        View::TaskDetail => task_detail::render_task_detail(frame, app, frame.area()),
+        View::Calendar => calendar::render_calendar(frame, app, frame.area()),
     }
 
     // Then render any active dialog on top

@@ -106,6 +106,20 @@ pub enum Command {
     /// Show detailed view of selected task
     ShowTaskDetail,
 
+    // === Calendar Navigation ===
+    /// Move to previous day in calendar
+    CalendarPrevDay,
+    /// Move to next day in calendar
+    CalendarNextDay,
+    /// Move to previous week in calendar
+    CalendarPrevWeek,
+    /// Move to next week in calendar
+    CalendarNextWeek,
+    /// Jump to today in calendar
+    CalendarToday,
+    /// Select tasks for the current calendar day
+    CalendarSelectDay,
+
     // === Filters ===
     /// Set a specific filter
     SetFilter(Filter),
@@ -444,6 +458,40 @@ impl Command {
 
             Command::ShowCalendar => {
                 app.current_view = View::Calendar;
+                // Reset calendar to today when opening
+                app.calendar_state.goto_today();
+                Ok(true)
+            }
+
+            // === Calendar Navigation ===
+            Command::CalendarPrevDay => {
+                app.calendar_state.prev_day();
+                Ok(true)
+            }
+
+            Command::CalendarNextDay => {
+                app.calendar_state.next_day();
+                Ok(true)
+            }
+
+            Command::CalendarPrevWeek => {
+                app.calendar_state.prev_week();
+                Ok(true)
+            }
+
+            Command::CalendarNextWeek => {
+                app.calendar_state.next_week();
+                Ok(true)
+            }
+
+            Command::CalendarToday => {
+                app.calendar_state.goto_today();
+                Ok(true)
+            }
+
+            Command::CalendarSelectDay => {
+                // Return to main view - filter could be applied for selected day
+                app.current_view = View::Main;
                 Ok(true)
             }
 

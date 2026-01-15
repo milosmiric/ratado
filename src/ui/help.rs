@@ -73,6 +73,14 @@ pub fn render_help(frame: &mut Frame, _app: &App, area: Rect) {
         keybinding_line("1-4", "Filter by priority (1=Low, 4=Urgent)"),
         Line::from(""),
         Line::from(vec![
+            Span::styled("  VIEWS", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(""),
+        keybinding_line("/", "Search tasks"),
+        keybinding_line("c", "Weekly calendar"),
+        keybinding_line("Enter", "Task detail view"),
+        Line::from(""),
+        Line::from(vec![
             Span::styled("  GENERAL", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(""),
