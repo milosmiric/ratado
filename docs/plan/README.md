@@ -59,7 +59,7 @@ Update this section as phases are completed:
 - [x] Phase 6: Projects & Tags
 - [x] Phase 7: Filtering & Search
 - [x] Phase 8: Additional Views
-- [ ] Phase 9: Notifications
+- [x] Phase 9: Notifications
 - [ ] Phase 10: CLI Interface
 - [ ] Phase 11: Configuration
 - [ ] Phase 12: Testing & Polish

@@ -18,13 +18,11 @@
 //! - [`handlers`] - Keyboard input and command handling
 //! - [`storage`] - Database operations
 //! - [`ui`] - Terminal UI widgets and views
-//! - [`notifications`] - Reminder system
 //! - [`utils`] - Helper functions for dates, IDs, etc.
 
 pub mod app;
 pub mod handlers;
 pub mod models;
-pub mod notifications;
 pub mod storage;
 pub mod ui;
 pub mod utils;

@@ -589,7 +589,7 @@ fn priority_color(priority: Priority) -> Color {
 /// - "mon", "tue", "wed", "thu", "fri", "sat", "sun" (next occurrence)
 /// - "next week", "next month"
 fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
-    use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc, Weekday};
+    use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone, Utc, Weekday};
 
     let input = input.to_lowercase().trim().to_string();
 
@@ -597,11 +597,17 @@ fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
         return None;
     }
 
-    let today = Utc::now().date_naive();
+    // Use local timezone for "today" reference
+    let today = Local::now().date_naive();
 
-    // Helper to create datetime at end of day
+    // Helper to create UTC datetime at end of day in local timezone
     let to_datetime = |date: NaiveDate| {
-        Utc.from_utc_datetime(&date.and_hms_opt(23, 59, 59).unwrap())
+        // Create end of day (23:59:59) in local timezone, then convert to UTC
+        let local_eod = date.and_hms_opt(23, 59, 59).unwrap();
+        Local.from_local_datetime(&local_eod)
+            .single()
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(|| Utc.from_utc_datetime(&local_eod))
     };
 
     // Keywords

@@ -21,8 +21,10 @@ pub fn render_header(frame: &mut Frame, app: &App, area: Rect) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::raw("v"),
-        Span::raw(env!("CARGO_PKG_VERSION")),
+        Span::styled(
+            concat!("v", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(Color::DarkGray),
+        ),
     ];
 
     // Add overdue badge if there are overdue tasks
@@ -30,7 +32,7 @@ pub fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     if overdue > 0 {
         spans.push(Span::raw("  "));
         spans.push(Span::styled(
-            format!(" !{} ", overdue),
+            format!(" Overdue: {} ", overdue),
             Style::default()
                 .fg(Color::White)
                 .bg(Color::Red)
@@ -43,18 +45,18 @@ pub fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     if today > 0 {
         spans.push(Span::raw("  "));
         spans.push(Span::styled(
-            format!(" Today: {} ", today),
+            format!(" Due Today: {} ", today),
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Yellow),
         ));
     }
 
-    // Add total task count
+    // Add total task count (dimmed)
     let total = app.total_task_count();
     spans.push(Span::raw("  "));
     spans.push(Span::styled(
-        format!(" {} tasks ", total),
+        format!("{} tasks total", total),
         Style::default().fg(Color::DarkGray),
     ));
 

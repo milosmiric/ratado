@@ -12,7 +12,6 @@ use super::{header, sidebar, status_bar, task_list};
 
 /// Renders the main view with all panels.
 pub fn render_main_view(frame: &mut Frame, app: &App, area: Rect) {
-    // Split into header, main content, and status bar
     let vertical_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
