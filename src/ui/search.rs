@@ -22,16 +22,26 @@ pub struct SearchResult {
     pub title_match: Option<(usize, usize)>,
     /// Snippet from description with match
     pub desc_snippet: Option<String>,
+    /// Matching tag name (if search matched a tag)
+    pub tag_match: Option<String>,
 }
 
 /// Performs search on tasks and returns matching results.
 ///
-/// Searches in both task title and description (case-insensitive).
+/// Searches in task title, description, and tags (case-insensitive).
+/// Tag searches can use the `#tag` syntax or just the tag name.
 pub fn search_tasks(query: &str, tasks: &[Task]) -> Vec<SearchResult> {
     let query_lower = query.to_lowercase();
     if query_lower.is_empty() {
         return Vec::new();
     }
+
+    // Check if searching specifically for a tag (starts with #)
+    let tag_query = if query_lower.starts_with('#') {
+        Some(query_lower.trim_start_matches('#'))
+    } else {
+        None
+    };
 
     tasks
         .iter()
@@ -53,11 +63,18 @@ pub fn search_tasks(query: &str, tasks: &[Task]) -> Vec<SearchResult> {
                 })
             });
 
-            if title_match.is_some() || desc_snippet.is_some() {
+            // Search in tags - match if any tag contains the query
+            let search_term = tag_query.unwrap_or(&query_lower);
+            let tag_match = task.tags.iter().find(|tag| {
+                tag.to_lowercase().contains(search_term)
+            }).cloned();
+
+            if title_match.is_some() || desc_snippet.is_some() || tag_match.is_some() {
                 Some(SearchResult {
                     task: task.clone(),
                     title_match,
                     desc_snippet,
+                    tag_match,
                 })
             } else {
                 None
@@ -201,11 +218,14 @@ fn render_search_results(
         let task_line = render_task_result(&result.task, result.title_match, is_selected, inner.width);
         lines.push(task_line);
 
-        // Render description snippet if present (and we have room)
+        // Render match info (description snippet or tag match) if present
         if lines.len() < visible_height {
             if let Some(ref snippet) = result.desc_snippet {
                 let desc_line = render_description_snippet(snippet, query, is_selected);
                 lines.push(desc_line);
+            } else if let Some(ref tag) = result.tag_match {
+                let tag_line = render_tag_match(tag, query, is_selected);
+                lines.push(tag_line);
             } else {
                 // Empty line for spacing
                 lines.push(Line::from(""));
@@ -330,6 +350,38 @@ fn render_task_result(
     Line::from(spans)
 }
 
+/// Renders a tag match with highlighting.
+fn render_tag_match(tag: &str, query: &str, _is_selected: bool) -> Line<'static> {
+    let indent = "     "; // Align with task title after selector + checkbox + priority
+    let tag_style = Style::default().fg(Color::Magenta);
+
+    // Find and highlight the match in the tag
+    let query_clean = query.to_lowercase().trim_start_matches('#').to_string();
+    let tag_lower = tag.to_lowercase();
+
+    if let Some(pos) = tag_lower.find(&query_clean) {
+        let before = &tag[..pos];
+        let matched = &tag[pos..pos + query_clean.len()];
+        let after = &tag[pos + query_clean.len()..];
+
+        let match_style = tag_style.add_modifier(Modifier::UNDERLINED | Modifier::BOLD);
+
+        Line::from(vec![
+            Span::styled(indent.to_string(), Style::default()),
+            Span::styled("Tag: #".to_string(), Style::default().fg(Color::DarkGray)),
+            Span::styled(before.to_string(), tag_style),
+            Span::styled(matched.to_string(), match_style),
+            Span::styled(after.to_string(), tag_style),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(indent.to_string(), Style::default()),
+            Span::styled("Tag: ".to_string(), Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("#{}", tag), tag_style),
+        ])
+    }
+}
+
 /// Renders a description snippet with the match highlighted.
 fn render_description_snippet(snippet: &str, query: &str, _is_selected: bool) -> Line<'static> {
     let indent = "     "; // Align with task title after selector + checkbox + priority
@@ -381,16 +433,19 @@ mod tests {
             {
                 let mut t = Task::new("Buy groceries");
                 t.description = Some("Get milk and bread from the store".to_string());
+                t.tags = vec!["shopping".to_string(), "home".to_string()];
                 t
             },
             {
                 let mut t = Task::new("Write documentation");
                 t.description = Some("Update the README file".to_string());
+                t.tags = vec!["work".to_string()];
                 t
             },
             {
                 let mut t = Task::new("Fix bug in search");
                 t.priority = Priority::High;
+                t.tags = vec!["work".to_string(), "urgent".to_string()];
                 t
             },
         ]
@@ -412,6 +467,32 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].task.title, "Write documentation");
         assert!(results[0].desc_snippet.is_some());
+    }
+
+    #[test]
+    fn test_search_by_tag() {
+        let tasks = sample_tasks();
+        let results = search_tasks("shopping", &tasks);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].task.title, "Buy groceries");
+        assert!(results[0].tag_match.is_some());
+        assert_eq!(results[0].tag_match.as_ref().unwrap(), "shopping");
+    }
+
+    #[test]
+    fn test_search_by_tag_with_hash() {
+        let tasks = sample_tasks();
+        let results = search_tasks("#urgent", &tasks);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].task.title, "Fix bug in search");
+        assert!(results[0].tag_match.is_some());
+    }
+
+    #[test]
+    fn test_search_tag_multiple_results() {
+        let tasks = sample_tasks();
+        let results = search_tasks("work", &tasks);
+        assert_eq!(results.len(), 2); // Both "Write documentation" and "Fix bug" have #work
     }
 
     #[test]
