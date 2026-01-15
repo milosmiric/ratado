@@ -390,4 +390,27 @@ mod tests {
         let inbox = projects.iter().find(|(p, _)| p.id == "inbox").unwrap();
         assert_eq!(inbox.1, 1);
     }
+
+    #[tokio::test]
+    async fn test_delete_all_projects_except_inbox() {
+        let db = setup_db().await;
+
+        // Create additional projects
+        db.insert_project(&Project::new("Work")).await.unwrap();
+        db.insert_project(&Project::new("Personal")).await.unwrap();
+        db.insert_project(&Project::new("Shopping")).await.unwrap();
+
+        // Verify we have 4 projects (inbox + 3 new)
+        let before = db.get_all_projects().await.unwrap();
+        assert_eq!(before.len(), 4);
+
+        // Delete all projects except inbox
+        let _deleted = db.delete_all_projects_except_inbox().await.unwrap();
+        // Note: turso may not return accurate rows_affected
+
+        // Verify only inbox remains
+        let after = db.get_all_projects().await.unwrap();
+        assert_eq!(after.len(), 1, "Only inbox should remain");
+        assert_eq!(after[0].id, "inbox");
+    }
 }

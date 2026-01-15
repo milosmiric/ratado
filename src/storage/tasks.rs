@@ -759,4 +759,61 @@ mod tests {
         assert_eq!(completed_count, 1);
         assert_eq!(archived, 0);
     }
+
+    #[tokio::test]
+    async fn test_delete_completed_tasks() {
+        let db = setup_db().await;
+
+        // Create pending tasks
+        db.insert_task(&Task::new("Pending 1")).await.unwrap();
+        db.insert_task(&Task::new("Pending 2")).await.unwrap();
+
+        // Create completed tasks
+        let mut completed1 = Task::new("Completed 1");
+        completed1.complete();
+        db.insert_task(&completed1).await.unwrap();
+
+        let mut completed2 = Task::new("Completed 2");
+        completed2.complete();
+        db.insert_task(&completed2).await.unwrap();
+
+        // Verify counts before deletion
+        let before = db.get_all_tasks().await.unwrap();
+        assert_eq!(before.len(), 4);
+        assert_eq!(before.iter().filter(|t| t.status == TaskStatus::Completed).count(), 2);
+
+        // Delete completed tasks
+        let _deleted = db.delete_completed_tasks().await.unwrap();
+        // Note: turso may not return accurate rows_affected, so we verify by checking remaining tasks
+
+        // Verify only pending tasks remain
+        let after = db.get_all_tasks().await.unwrap();
+        assert_eq!(after.len(), 2, "Should have 2 tasks remaining after deleting completed");
+        assert!(after.iter().all(|t| t.status == TaskStatus::Pending), "All remaining should be pending");
+    }
+
+    #[tokio::test]
+    async fn test_delete_all_tasks() {
+        let db = setup_db().await;
+
+        // Create various tasks
+        db.insert_task(&Task::new("Task 1")).await.unwrap();
+        db.insert_task(&Task::new("Task 2")).await.unwrap();
+
+        let mut completed = Task::new("Completed");
+        completed.complete();
+        db.insert_task(&completed).await.unwrap();
+
+        // Verify we have tasks before deletion
+        let before = db.get_all_tasks().await.unwrap();
+        assert_eq!(before.len(), 3);
+
+        // Delete all tasks
+        let _deleted = db.delete_all_tasks().await.unwrap();
+        // Note: turso may not return accurate rows_affected
+
+        // Verify no tasks remain
+        let tasks = db.get_all_tasks().await.unwrap();
+        assert!(tasks.is_empty(), "All tasks should be deleted");
+    }
 }
