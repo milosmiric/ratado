@@ -1,7 +1,8 @@
 //! Database storage module.
 //!
 //! This module handles all database operations using Turso (SQLite-compatible).
-//! Data is stored locally at `~/.config/ratado/ratado.db`.
+//! Data is stored locally at `~/Library/Application Support/ratado/ratado.db` (macOS)
+//! or `~/.config/ratado/ratado.db` (Linux).
 //!
 //! ## Architecture
 //!

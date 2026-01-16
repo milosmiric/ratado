@@ -10,7 +10,7 @@
 //! use ratado::storage::Database;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Open database at default location (~/.config/ratado/ratado.db)
+//! // Open database at default location (platform-specific, see below)
 //! let db = Database::open_default().await?;
 //!
 //! // Or open an in-memory database for testing
@@ -169,7 +169,8 @@ impl Database {
 
     /// Opens the database at the default location.
     ///
-    /// The default path is `~/.config/ratado/ratado.db` on Linux/macOS.
+    /// The default path is `~/Library/Application Support/ratado/ratado.db` on macOS
+    /// or `~/.config/ratado/ratado.db` on Linux.
     /// Creates the directory structure if it doesn't exist.
     ///
     /// # Returns
@@ -200,7 +201,8 @@ impl Database {
 
     /// Returns the default database path.
     ///
-    /// The default path is `~/.config/ratado/ratado.db` on Linux/macOS.
+    /// The default path is `~/Library/Application Support/ratado/ratado.db` on macOS
+    /// or `~/.config/ratado/ratado.db` on Linux.
     /// Creates the config directory if it doesn't exist.
     ///
     /// # Returns

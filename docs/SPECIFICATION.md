@@ -368,7 +368,7 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 ### 7.1 Database
 
 - **Type**: Turso (SQLite-compatible, pure Rust, async)
-- **Location**: `~/.config/ratado/ratado.db`
+- **Location**: `~/Library/Application Support/ratado/ratado.db` (macOS) or `~/.config/ratado/ratado.db` (Linux)
 - **Migrations**: Auto-run on startup
 
 ### 7.2 Schema

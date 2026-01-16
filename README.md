@@ -45,7 +45,7 @@ Launch Ratado:
 ratado
 ```
 
-Data is stored at `~/.config/ratado/ratado.db`
+Data is stored at `~/Library/Application Support/ratado/ratado.db` (macOS) or `~/.config/ratado/ratado.db` (Linux)
 
 ## Keybindings
 
