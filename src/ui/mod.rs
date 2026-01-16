@@ -20,6 +20,7 @@
 //! - [`search`] - Search view for finding tasks
 //! - [`task_detail`] - Task detail view
 //! - [`calendar`] - Weekly calendar view
+//! - [`theme`] - Color palette and styling system
 
 pub mod calendar;
 pub mod date_picker;
@@ -36,10 +37,11 @@ mod status_bar;
 pub mod tag_input;
 mod task_detail;
 pub mod task_list;
+pub mod theme;
 
 use ratatui::{
     layout::{Alignment, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -92,37 +94,55 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
 /// Renders a warning message when the terminal is too small.
 fn render_size_warning(frame: &mut Frame, area: Rect) {
+    use theme::{icons, WARNING, SUCCESS, ERROR, TEXT_MUTED, PRIMARY_LIGHT};
+
     let width_ok = area.width >= MIN_WIDTH;
     let height_ok = area.height >= MIN_HEIGHT;
 
     let mut lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{} ", icons::WARNING_ICON), Style::default().fg(WARNING)),
+            Span::styled("Terminal Too Small", Style::default().fg(WARNING)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  Width:  "),
+            Span::styled(
+                format!("{:>3}", area.width),
+                Style::default().fg(if width_ok { SUCCESS } else { ERROR }),
+            ),
+            Span::styled(format!(" / {} ", MIN_WIDTH), Style::default().fg(TEXT_MUTED)),
+            Span::styled(
+                if width_ok { icons::CHECK } else { icons::CROSS },
+                Style::default().fg(if width_ok { SUCCESS } else { ERROR }),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("  Height: "),
+            Span::styled(
+                format!("{:>3}", area.height),
+                Style::default().fg(if height_ok { SUCCESS } else { ERROR }),
+            ),
+            Span::styled(format!(" / {} ", MIN_HEIGHT), Style::default().fg(TEXT_MUTED)),
+            Span::styled(
+                if height_ok { icons::CHECK } else { icons::CROSS },
+                Style::default().fg(if height_ok { SUCCESS } else { ERROR }),
+            ),
+        ]),
+        Line::from(""),
         Line::from(Span::styled(
-            "Terminal Too Small",
-            Style::default().fg(Color::Yellow),
+            "Please resize your terminal window.",
+            Style::default().fg(TEXT_MUTED),
         )),
-        Line::from(""),
-        Line::from(format!(
-            "Width:  {} (need {} minimum) {}",
-            area.width,
-            MIN_WIDTH,
-            if width_ok { "✓" } else { "✗" }
-        )),
-        Line::from(format!(
-            "Height: {} (need {} minimum) {}",
-            area.height,
-            MIN_HEIGHT,
-            if height_ok { "✓" } else { "✗" }
-        )),
-        Line::from(""),
-        Line::from("Please resize your terminal window."),
     ];
 
     // Add hint about current size
     if area.width >= 40 && area.height >= 8 {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "Ratado requires a larger terminal for optimal display.",
-            Style::default().fg(Color::DarkGray),
+            "Ratado",
+            Style::default().fg(PRIMARY_LIGHT),
         )));
     }
 

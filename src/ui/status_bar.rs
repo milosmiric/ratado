@@ -1,10 +1,11 @@
 //! Status bar widget.
 //!
-//! Displays keybinding hints and status messages at the bottom of the screen.
+//! Displays keybinding hints and status messages with modern styling.
+//! The status bar provides context-sensitive help and feedback.
 
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -12,8 +13,9 @@ use ratatui::{
 
 use crate::app::{App, FocusPanel, InputMode};
 use crate::models::Filter;
+use super::theme::{self, icons};
 
-/// Renders the status bar.
+/// Renders the status bar with themed styling.
 pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let content = match app.input_mode {
         InputMode::Normal => render_normal_mode_hints(app),
@@ -25,14 +27,31 @@ pub fn render_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(status_bar, area);
 }
 
+/// Creates a styled keybinding hint.
+fn key_hint(key: &str, label: &str) -> Vec<Span<'static>> {
+    vec![
+        Span::styled(
+            format!(" {}", key),
+            Style::default()
+                .fg(theme::ACCENT)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!(" {} ", label), Style::default().fg(theme::TEXT_MUTED)),
+    ]
+}
+
 /// Renders hints for normal mode.
 fn render_normal_mode_hints(app: &App) -> Line<'static> {
     // Show status message if present
     if let Some(ref msg) = app.status_message {
         return Line::from(vec![
             Span::styled(
-                format!(" {} ", msg),
-                Style::default().fg(Color::Green),
+                format!(" {} ", icons::CHECK),
+                Style::default().fg(theme::SUCCESS),
+            ),
+            Span::styled(
+                format!("{} ", msg),
+                Style::default().fg(theme::SUCCESS),
             ),
         ]);
     }
@@ -46,48 +65,36 @@ fn render_normal_mode_hints(app: &App) -> Line<'static> {
 
 /// Renders hints when sidebar is focused.
 fn render_sidebar_hints(_app: &App) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(" a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" New  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("e", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Edit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("d", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Delete  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("c", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Calendar  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Tasks  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Help", Style::default().fg(Color::DarkGray)),
-    ])
+    let mut spans = Vec::new();
+    spans.extend(key_hint("a", "New"));
+    spans.extend(key_hint("e", "Edit"));
+    spans.extend(key_hint("d", "Delete"));
+    spans.extend(key_hint("c", "Calendar"));
+    spans.extend(key_hint("Tab", "Tasks"));
+    spans.extend(key_hint("?", "Help"));
+    Line::from(spans)
 }
 
 /// Renders hints when task list is focused.
 fn render_tasklist_hints(app: &App) -> Line<'static> {
-    let mut spans = vec![
-        Span::styled(" a", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Add  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("e", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Edit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Space", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Done  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("/", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Search  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("c", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Calendar  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("f", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Filter  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Help", Style::default().fg(Color::DarkGray)),
-    ];
+    let mut spans = Vec::new();
+    spans.extend(key_hint("a", "Add"));
+    spans.extend(key_hint("e", "Edit"));
+    spans.extend(key_hint("Space", "Done"));
+    spans.extend(key_hint("/", "Search"));
+    spans.extend(key_hint("f", "Filter"));
+    spans.extend(key_hint("?", "Help"));
 
     // Add filter indicator if not default
     let filter_name = filter_display_name(&app.filter);
     if !filter_name.is_empty() {
-        spans.push(Span::styled("  │ ", Style::default().fg(Color::DarkGray)));
         spans.push(Span::styled(
-            format!("Filter: {}", filter_name),
-            Style::default().fg(Color::Magenta),
+            format!(" {} ", icons::LINE_VERTICAL),
+            Style::default().fg(theme::BORDER),
+        ));
+        spans.push(Span::styled(
+            format!("{} {}", icons::BULLET, filter_name),
+            Style::default().fg(theme::INFO),
         ));
     }
 
@@ -113,22 +120,39 @@ fn filter_display_name(filter: &Filter) -> String {
 
 /// Renders hints for editing mode.
 fn render_editing_mode_hints() -> Line<'static> {
-    Line::from(vec![
-        Span::styled(" Editing: ", Style::default().fg(Color::Yellow)),
-        Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Save  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Cancel", Style::default().fg(Color::DarkGray)),
-    ])
+    let mut spans = vec![
+        Span::styled(
+            format!(" {} Editing ", icons::BULLET),
+            Style::default()
+                .fg(theme::WARNING)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{} ", icons::LINE_VERTICAL),
+            Style::default().fg(theme::BORDER),
+        ),
+    ];
+    spans.extend(key_hint("Enter", "Save"));
+    spans.extend(key_hint("Esc", "Cancel"));
+    Line::from(spans)
 }
 
 /// Renders hints for search mode.
 fn render_search_mode_hints() -> Line<'static> {
-    Line::from(vec![
-        Span::styled(" Search: ", Style::default().fg(Color::Yellow)),
-        Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Search  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" Cancel", Style::default().fg(Color::DarkGray)),
-    ])
+    let mut spans = vec![
+        Span::styled(
+            format!(" {} Search ", icons::BULLET),
+            Style::default()
+                .fg(theme::INFO)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{} ", icons::LINE_VERTICAL),
+            Style::default().fg(theme::BORDER),
+        ),
+    ];
+    spans.extend(key_hint("Enter", "Go"));
+    spans.extend(key_hint("↑/↓", "Navigate"));
+    spans.extend(key_hint("Esc", "Cancel"));
+    Line::from(spans)
 }

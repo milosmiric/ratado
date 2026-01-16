@@ -357,6 +357,14 @@ impl App {
             .count()
     }
 
+    /// Returns the count of tasks in progress.
+    pub fn in_progress_count(&self) -> usize {
+        self.tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::InProgress)
+            .count()
+    }
+
     /// Returns the task count for a specific tag.
     pub fn task_count_for_tag(&self, tag_name: &str) -> usize {
         self.tasks

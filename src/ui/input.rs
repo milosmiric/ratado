@@ -17,9 +17,11 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     widgets::{Block, Borders, Paragraph, Widget},
 };
+
+use super::theme;
 
 /// A text input widget with cursor support.
 ///
@@ -219,16 +221,24 @@ impl TextInput {
         focused: bool,
         label: Option<&str>,
     ) {
-        let style = if focused {
-            Style::default().fg(Color::Yellow)
+        let text_style = if focused {
+            Style::default().fg(theme::TEXT_PRIMARY)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(theme::TEXT_SECONDARY)
         };
 
         let border_style = if focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(theme::PRIMARY_LIGHT)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(theme::BORDER)
+        };
+
+        let label_style = if focused {
+            Style::default()
+                .fg(theme::PRIMARY_LIGHT)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme::TEXT_MUTED)
         };
 
         let mut block = Block::default()
@@ -236,7 +246,10 @@ impl TextInput {
             .border_style(border_style);
 
         if let Some(label) = label {
-            block = block.title(format!(" {} ", label));
+            block = block.title(ratatui::text::Span::styled(
+                format!(" {} ", label),
+                label_style,
+            ));
         }
 
         let inner = block.inner(area);
@@ -244,10 +257,10 @@ impl TextInput {
 
         // Render the text or placeholder
         let is_empty = self.value.is_empty();
-        let text_style = if is_empty {
-            Style::default().fg(Color::DarkGray)
+        let display_style = if is_empty {
+            Style::default().fg(theme::TEXT_MUTED)
         } else {
-            style
+            text_style
         };
 
         // Calculate visible portion based on cursor position
@@ -267,7 +280,7 @@ impl TextInput {
             0
         };
 
-        let paragraph = Paragraph::new(visible_text).style(text_style);
+        let paragraph = Paragraph::new(visible_text).style(display_style);
         paragraph.render(inner, buf);
 
         // Render cursor if focused
@@ -281,7 +294,7 @@ impl TextInput {
                 };
                 buf[(cursor_x, inner.y)]
                     .set_char(cursor_char)
-                    .set_style(Style::default().bg(Color::Yellow).fg(Color::Black));
+                    .set_style(Style::default().bg(theme::ACCENT).fg(Color::Black));
             }
         }
     }

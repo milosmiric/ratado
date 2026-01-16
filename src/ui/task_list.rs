@@ -1,10 +1,11 @@
 //! Task list widget.
 //!
-//! Displays the main list of tasks with status, priority, title, and due date.
+//! Displays the main list of tasks with a modern, distinctive visual design.
+//! Features semantic coloring, clear visual hierarchy, and smooth selection states.
 
 use ratatui::{
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
@@ -13,58 +14,44 @@ use ratatui::{
 use crate::app::{App, FocusPanel};
 use crate::models::{Priority, Project, Task, TaskStatus};
 use crate::utils::format_relative_date;
+use super::theme::{self, icons};
 
-/// Renders the task list.
+/// Renders the task list with modern styling.
 pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
     let is_focused = app.focus == FocusPanel::TaskList;
 
-    let border_style = if is_focused {
-        Style::default().fg(Color::Cyan)
+    // Title style indicates focus
+    let title_style = if is_focused {
+        Style::default()
+            .fg(theme::PRIMARY_LIGHT)
+            .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme::TEXT_MUTED)
     };
 
-    // Build title with filter and sort info
-    let title = format!(
-        " TASKS  [{}]  [{}] ",
-        app.filter_name(),
-        app.sort_name()
-    );
+    let filter_style = Style::default().fg(theme::TEXT_MUTED);
+
+    let title = Line::from(vec![
+        Span::styled(" Tasks ", title_style),
+        Span::styled(
+            format!("{} {} ", icons::DOT, app.filter_name()),
+            filter_style,
+        ),
+        Span::styled(
+            format!("{} {} ", icons::DOT, app.sort_name()),
+            filter_style,
+        ),
+    ]);
 
     let block = Block::default()
-        .title(Span::styled(
-            title,
-            Style::default()
-                .fg(if is_focused { Color::Cyan } else { Color::White })
-                .add_modifier(Modifier::BOLD),
-        ))
-        .borders(Borders::NONE)
-        .border_style(border_style);
+        .title(title)
+        .borders(Borders::NONE);
 
     let tasks = app.visible_tasks();
 
-    // Handle empty state
+    // Handle empty state with inspiring design
     if tasks.is_empty() {
-        let empty_text = vec![
-            Line::from(""),
-            Line::from(Span::styled(
-                "No tasks yet!",
-                Style::default()
-                    .fg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            )),
-            Line::from(""),
-            Line::from(Span::styled(
-                "Press [a] to add your first task",
-                Style::default().fg(Color::DarkGray),
-            )),
-        ];
-
-        let empty = Paragraph::new(empty_text)
-            .alignment(Alignment::Center)
-            .block(block);
-
-        frame.render_widget(empty, area);
+        render_empty_state(frame, block, area);
         return;
     }
 
@@ -78,9 +65,9 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, task)| {
             let selected = Some(i) == app.selected_task_index;
             let project_name = if show_projects {
-                task.project_id.as_ref().and_then(|pid| {
-                    app.projects.iter().find(|p| &p.id == pid)
-                })
+                task.project_id
+                    .as_ref()
+                    .and_then(|pid| app.projects.iter().find(|p| &p.id == pid))
             } else {
                 None
             };
@@ -91,12 +78,8 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
     // Create list with selection state
     let list = List::new(items)
         .block(block)
-        .highlight_style(
-            Style::default()
-                .bg(Color::Rgb(30, 60, 90))
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("▶ ");
+        .highlight_style(Style::default().bg(theme::BG_SELECTION))
+        .highlight_symbol(format!("{} ", icons::SELECTOR));
 
     // Render with state for selection highlighting
     let mut state = ListState::default();
@@ -105,7 +88,38 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-/// Renders a single task row.
+/// Renders an inspiring empty state.
+fn render_empty_state(frame: &mut Frame, block: Block, area: Rect) {
+    let empty_text = vec![
+        Line::from(""),
+        Line::from(""),
+        Line::from(Span::styled(
+            icons::SPARKLE,
+            Style::default().fg(theme::PRIMARY),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Your task list is empty",
+            Style::default()
+                .fg(theme::TEXT_SECONDARY)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Press ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("a", Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(" to add your first task", Style::default().fg(theme::TEXT_MUTED)),
+        ]),
+    ];
+
+    let empty = Paragraph::new(empty_text)
+        .alignment(Alignment::Center)
+        .block(block);
+
+    frame.render_widget(empty, area);
+}
+
+/// Renders a single task row with modern styling.
 fn render_task_row(
     task: &Task,
     selected: bool,
@@ -113,57 +127,66 @@ fn render_task_row(
     width: u16,
     project: Option<&Project>,
 ) -> ListItem<'static> {
-    // Checkbox based on status
-    let checkbox = match task.status {
-        TaskStatus::Pending => "[ ]",
-        TaskStatus::InProgress => "[▸]",
-        TaskStatus::Completed | TaskStatus::Archived => "[✓]",
+    // Status indicator with themed icons
+    let (status_icon, status_style) = match task.status {
+        TaskStatus::Pending => (
+            icons::CHECKBOX_EMPTY,
+            Style::default().fg(theme::STATUS_PENDING),
+        ),
+        TaskStatus::InProgress => (
+            icons::CHECKBOX_PROGRESS,
+            Style::default().fg(theme::STATUS_IN_PROGRESS),
+        ),
+        TaskStatus::Completed => (
+            icons::CHECKBOX_DONE,
+            Style::default().fg(theme::STATUS_COMPLETED),
+        ),
+        TaskStatus::Archived => (
+            icons::CHECKBOX_ARCHIVED,
+            Style::default().fg(theme::STATUS_ARCHIVED),
+        ),
     };
 
-    // Priority indicator
-    let priority = match task.priority {
-        Priority::Urgent => "!!",
-        Priority::High => " !",
-        Priority::Medium => "  ",
-        Priority::Low => " ↓",
+    // Priority indicator with themed styling
+    let (priority_icon, priority_style) = match task.priority {
+        Priority::Urgent => (
+            icons::PRIORITY_URGENT,
+            Style::default()
+                .fg(theme::PRIORITY_URGENT)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Priority::High => (icons::PRIORITY_HIGH, Style::default().fg(theme::PRIORITY_HIGH)),
+        Priority::Medium => (" ", Style::default()),
+        Priority::Low => (icons::PRIORITY_LOW, Style::default().fg(theme::PRIORITY_LOW)),
     };
 
-    // Priority color
-    let priority_style = match task.priority {
-        Priority::Urgent => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        Priority::High => Style::default().fg(Color::Yellow),
-        Priority::Medium => Style::default(),
-        Priority::Low => Style::default().fg(Color::DarkGray),
-    };
-
-    // Date string - for completed tasks show both due date and completion date if available
+    // Date string - for completed tasks show both due date and completion date
     let date_str = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
-        let done_str = task.completed_at
-            .map(|d| format!("✓ {}", format_relative_date(d)));
-        let due_str = task.due_date
-            .map(|d| format!("Due {}", format_relative_date(d)));
+        let done_str = task
+            .completed_at
+            .map(|d| format!("{} {}", icons::CHECK, format_relative_date(d)));
+        let due_str = task.due_date.map(format_relative_date);
 
         match (due_str, done_str) {
-            (Some(due), Some(done)) => format!("{} · {}", due, done),
+            (Some(due), Some(done)) => format!("{} {} {}", due, icons::DOT, done),
             (None, Some(done)) => done,
             (Some(due), None) => due,
             (None, None) => String::new(),
         }
     } else {
-        task.due_date
-            .map(format_relative_date)
-            .unwrap_or_default()
+        task.due_date.map(format_relative_date).unwrap_or_default()
     };
 
     // Format tags string
     let tags_str = render_tags(&task.tags, 20);
 
     // Format project string (shown in "All Tasks" view)
-    let project_str = project.map(|p| format!("@{}", p.name)).unwrap_or_default();
+    let project_str = project
+        .map(|p| format!("{}{}", icons::PROJECT_PREFIX, p.name))
+        .unwrap_or_default();
 
     // Calculate available width for title
-    // Format: "  [ ] !! Title...  @Project  #tags  Due Date"
-    let fixed_width = 3 + 3 + 3 + project_str.len() + 1 + tags_str.len() + 2 + date_str.len() + 2;
+    let fixed_width = 3 + 2 + 2 + project_str.len() + 1 + tags_str.len() + 2 + date_str.len() + 4;
     let title_width = (width as usize).saturating_sub(fixed_width).max(10);
 
     // Truncate title if needed
@@ -173,40 +196,52 @@ fn render_task_row(
         task.title.clone()
     };
 
-    // Base style based on task state
-    let base_style = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::DIM)
+    // Title style based on task state
+    let title_style = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived
+    {
+        // Completed tasks: readable gray
+        Style::default().fg(theme::TEXT_COMPLETED)
     } else if task.is_overdue() {
-        Style::default().fg(Color::Red)
+        Style::default().fg(theme::DUE_OVERDUE)
     } else if task.is_due_today() {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme::DUE_TODAY)
     } else if task.is_due_this_week() {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme::DUE_WEEK)
     } else {
-        Style::default()
+        Style::default().fg(theme::TEXT_PRIMARY)
     };
 
-    // Selection highlight
-    let row_style = if selected && focused {
-        base_style.add_modifier(Modifier::BOLD)
+    // Selection emphasis
+    let title_style = if selected && focused {
+        title_style.add_modifier(Modifier::BOLD)
     } else {
-        base_style
+        title_style
+    };
+
+    // Date style
+    let date_style = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived
+    {
+        Style::default().fg(theme::TEXT_COMPLETED)
+    } else if task.is_overdue() {
+        Style::default().fg(theme::DUE_OVERDUE)
+    } else if task.is_due_today() {
+        Style::default().fg(theme::DUE_TODAY)
+    } else {
+        Style::default().fg(theme::TEXT_MUTED)
     };
 
     // Build the line with spans
     let mut spans = vec![
-        Span::styled(format!("  {} ", checkbox), row_style),
-        Span::styled(format!("{} ", priority), priority_style),
-        Span::styled(format!("{:<width$}", title, width = title_width), row_style),
+        Span::styled(format!(" {} ", status_icon), status_style),
+        Span::styled(format!("{} ", priority_icon), priority_style),
+        Span::styled(format!("{:<width$}", title, width = title_width), title_style),
     ];
 
     // Add project name if present (shown in "All Tasks" view)
     if !project_str.is_empty() {
         spans.push(Span::styled(
             format!(" {}", project_str),
-            Style::default().fg(Color::Blue),
+            Style::default().fg(theme::PROJECT),
         ));
     }
 
@@ -214,16 +249,19 @@ fn render_task_row(
     if !tags_str.is_empty() {
         spans.push(Span::styled(
             format!(" {}", tags_str),
-            Style::default().fg(Color::Magenta),
+            Style::default().fg(theme::TAG),
         ));
     }
 
-    spans.push(Span::styled(format!("  {}", date_str), row_style.fg(Color::DarkGray)));
+    // Add date
+    if !date_str.is_empty() {
+        spans.push(Span::styled(format!("  {}", date_str), date_style));
+    }
 
     ListItem::new(Line::from(spans))
 }
 
-/// Renders tags as a formatted string.
+/// Renders tags as a formatted string with themed prefix.
 fn render_tags(tags: &[String], max_width: usize) -> String {
     if tags.is_empty() {
         return String::new();
@@ -231,7 +269,7 @@ fn render_tags(tags: &[String], max_width: usize) -> String {
 
     let tag_str: String = tags
         .iter()
-        .map(|t| format!("#{}", t))
+        .map(|t| format!("{}{}", icons::TAG_PREFIX, t))
         .collect::<Vec<_>>()
         .join(" ");
 
