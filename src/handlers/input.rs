@@ -66,7 +66,7 @@ pub fn map_key_to_command(key: KeyEvent, app: &App) -> Option<Command> {
     match app.current_view {
         View::Help => return map_help_view_key(key),
         View::DebugLogs => return map_debug_view_key(key),
-        View::Calendar => return map_calendar_view_key(key),
+        View::Calendar => return map_calendar_view_key(key, app),
         View::TaskDetail => return map_task_detail_view_key(key),
         View::Search => {
             // In search view, handle search-specific keys
@@ -125,30 +125,67 @@ fn map_debug_view_key(key: KeyEvent) -> Option<Command> {
 
 /// Maps keys in the Calendar view.
 ///
-/// Handles navigation between days and weeks.
-fn map_calendar_view_key(key: KeyEvent) -> Option<Command> {
-    match key.code {
-        // Escape returns to main view
-        KeyCode::Esc => Some(Command::ShowMain),
+/// Handles navigation between days and weeks when focused on day grid,
+/// or task navigation when focused on task list.
+fn map_calendar_view_key(key: KeyEvent, app: &App) -> Option<Command> {
+    use crate::ui::calendar::CalendarFocus;
 
-        // Day navigation
-        KeyCode::Left | KeyCode::Char('h') => Some(Command::CalendarPrevDay),
-        KeyCode::Right | KeyCode::Char('l') => Some(Command::CalendarNextDay),
+    // Tab toggles focus regardless of current focus
+    if key.code == KeyCode::Tab {
+        return Some(Command::CalendarToggleFocus);
+    }
 
-        // Week navigation (using j/k for up/down since they're intuitive)
-        KeyCode::Up | KeyCode::Char('k') => Some(Command::CalendarPrevWeek),
-        KeyCode::Down | KeyCode::Char('j') => Some(Command::CalendarNextWeek),
+    // 'f' toggles completed filter in both focus states
+    if key.code == KeyCode::Char('f') {
+        return Some(Command::CalendarToggleCompleted);
+    }
 
-        // Jump to today
-        KeyCode::Char('t') => Some(Command::CalendarToday),
+    match app.calendar_state.focus {
+        CalendarFocus::DayGrid => match key.code {
+            // Escape returns to main view
+            KeyCode::Esc => Some(Command::ShowMain),
 
-        // Select current day and return to main
-        KeyCode::Enter => Some(Command::CalendarSelectDay),
+            // Day navigation
+            KeyCode::Left | KeyCode::Char('h') => Some(Command::CalendarPrevDay),
+            KeyCode::Right | KeyCode::Char('l') => Some(Command::CalendarNextDay),
 
-        // Quit
-        KeyCode::Char('q') => Some(Command::Quit),
+            // Week navigation
+            KeyCode::Up | KeyCode::Char('k') => Some(Command::CalendarPrevWeek),
+            KeyCode::Down | KeyCode::Char('j') => Some(Command::CalendarNextWeek),
 
-        _ => None,
+            // Jump to today
+            KeyCode::Char('t') => Some(Command::CalendarToday),
+
+            // Select current day and return to main
+            KeyCode::Enter => Some(Command::CalendarSelectDay),
+
+            // Quit
+            KeyCode::Char('q') => Some(Command::Quit),
+
+            _ => None,
+        },
+        CalendarFocus::TaskList => match key.code {
+            // Escape returns focus to day grid
+            KeyCode::Esc => Some(Command::CalendarToggleFocus),
+
+            // Task navigation
+            KeyCode::Up | KeyCode::Char('k') => Some(Command::CalendarTaskUp),
+            KeyCode::Down | KeyCode::Char('j') => Some(Command::CalendarTaskDown),
+
+            // Task actions
+            KeyCode::Char(' ') => Some(Command::CalendarToggleTask),
+            KeyCode::Char('p') => Some(Command::CalendarCyclePriority),
+            KeyCode::Char('e') => Some(Command::CalendarEditTask),
+            KeyCode::Char('d') => Some(Command::DeleteTask),
+
+            // Go to task in its project
+            KeyCode::Enter => Some(Command::CalendarGoToTask),
+
+            // Quit
+            KeyCode::Char('q') => Some(Command::Quit),
+
+            _ => None,
+        },
     }
 }
 

@@ -119,6 +119,22 @@ pub enum Command {
     CalendarToday,
     /// Select tasks for the current calendar day
     CalendarSelectDay,
+    /// Toggle focus between day grid and task list
+    CalendarToggleFocus,
+    /// Move to previous task in calendar task list
+    CalendarTaskUp,
+    /// Move to next task in calendar task list
+    CalendarTaskDown,
+    /// Toggle selected task status in calendar
+    CalendarToggleTask,
+    /// Cycle priority of selected task in calendar
+    CalendarCyclePriority,
+    /// Edit selected task in calendar
+    CalendarEditTask,
+    /// Navigate to selected task in its project
+    CalendarGoToTask,
+    /// Toggle showing completed tasks in calendar
+    CalendarToggleCompleted,
 
     // === Settings ===
     /// Show the settings dialog
@@ -496,6 +512,121 @@ impl Command {
             Command::CalendarSelectDay => {
                 // Return to main view - filter could be applied for selected day
                 app.current_view = View::Main;
+                Ok(true)
+            }
+
+            Command::CalendarToggleFocus => {
+                app.calendar_state.toggle_focus();
+                Ok(true)
+            }
+
+            Command::CalendarTaskUp => {
+                app.calendar_state.prev_task();
+                Ok(true)
+            }
+
+            Command::CalendarTaskDown => {
+                let task_count = crate::ui::calendar::get_task_count_for_selected_day(app);
+                app.calendar_state.next_task(task_count);
+                Ok(true)
+            }
+
+            Command::CalendarToggleTask => {
+                let task_ids = crate::ui::calendar::get_tasks_for_selected_day(app);
+                if let Some(task_id) = task_ids.get(app.calendar_state.selected_task_index)
+                    && let Some(task) = app.tasks.iter().find(|t| &t.id == task_id)
+                {
+                    let mut task = task.clone();
+                    if task.status == crate::models::TaskStatus::Completed {
+                        task.reopen();
+                        app.set_status("Task reopened");
+                    } else {
+                        task.complete();
+                        app.set_status("Task completed!");
+                    }
+                    app.db.update_task(&task).await?;
+                    app.load_data().await?;
+                }
+                Ok(true)
+            }
+
+            Command::CalendarCyclePriority => {
+                let task_ids = crate::ui::calendar::get_tasks_for_selected_day(app);
+                if let Some(task_id) = task_ids.get(app.calendar_state.selected_task_index)
+                    && let Some(task) = app.tasks.iter().find(|t| &t.id == task_id)
+                {
+                    let mut task = task.clone();
+                    task.priority = match task.priority {
+                        Priority::Low => Priority::Medium,
+                        Priority::Medium => Priority::High,
+                        Priority::High => Priority::Urgent,
+                        Priority::Urgent => Priority::Low,
+                    };
+                    app.db.update_task(&task).await?;
+                    app.load_data().await?;
+                    app.set_status(format!("Priority: {:?}", task.priority));
+                }
+                Ok(true)
+            }
+
+            Command::CalendarEditTask => {
+                let task_ids = crate::ui::calendar::get_tasks_for_selected_day(app);
+                if let Some(task_id) = task_ids.get(app.calendar_state.selected_task_index)
+                    && let Some(task) = app.tasks.iter().find(|t| &t.id == task_id)
+                {
+                    let dialog = AddTaskDialog::from_task(task).with_available_tags(app.tags.clone());
+                    app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
+                    app.set_status("Tab between fields, Ctrl+Enter to save");
+                }
+                Ok(true)
+            }
+
+            Command::CalendarGoToTask => {
+                let task_ids = crate::ui::calendar::get_tasks_for_selected_day(app);
+                if let Some(task_id) = task_ids.get(app.calendar_state.selected_task_index)
+                    && let Some(task) = app.tasks.iter().find(|t| &t.id == task_id)
+                {
+                    let task_id = task.id.clone();
+                    let project_id = task.project_id.clone();
+
+                    // Switch to main view
+                    app.current_view = View::Main;
+                    app.focus = FocusPanel::TaskList;
+
+                    // Select the project in the sidebar
+                    if let Some(pid) = &project_id {
+                        // Find the project index and select it
+                        if let Some(idx) = app.projects.iter().position(|p| &p.id == pid) {
+                            // Add 1 because index 0 is "All Tasks"
+                            app.selected_project_index = idx + 1;
+                        }
+                    } else {
+                        // No project - select "All Tasks"
+                        app.selected_project_index = 0;
+                    }
+
+                    // Clear filter to ensure task is visible
+                    app.filter = Filter::All;
+
+                    // Find and select the task
+                    if let Some(idx) = app.visible_tasks().iter().position(|t| t.id == task_id) {
+                        app.selected_task_index = Some(idx);
+                    }
+
+                    // Reset calendar focus for next time
+                    app.calendar_state.focus = crate::ui::calendar::CalendarFocus::DayGrid;
+                }
+                Ok(true)
+            }
+
+            Command::CalendarToggleCompleted => {
+                app.calendar_state.toggle_show_completed();
+                let status = if app.calendar_state.show_completed {
+                    "Showing all tasks"
+                } else {
+                    "Showing active tasks only"
+                };
+                app.set_status(status);
                 Ok(true)
             }
 

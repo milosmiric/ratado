@@ -14,8 +14,19 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::models::{Priority, Task, TaskStatus};
-use super::theme;
+use crate::models::{Priority, SortOrder, Task, TaskStatus};
+use crate::utils::format_relative_date;
+use super::theme::{self, icons};
+
+/// Focus state for the calendar view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CalendarFocus {
+    /// Focus on the day grid (navigate days/weeks)
+    #[default]
+    DayGrid,
+    /// Focus on the task list for the selected day
+    TaskList,
+}
 
 /// State for the calendar view.
 ///
@@ -26,6 +37,12 @@ pub struct CalendarState {
     pub week_start: NaiveDate,
     /// The currently selected day (0-6, Monday-Sunday)
     pub selected_day: usize,
+    /// Current focus (day grid or task list)
+    pub focus: CalendarFocus,
+    /// Selected task index in the task list (when focused on tasks)
+    pub selected_task_index: usize,
+    /// Whether to show completed tasks in the task list
+    pub show_completed: bool,
 }
 
 impl Default for CalendarState {
@@ -36,6 +53,9 @@ impl Default for CalendarState {
         Self {
             week_start,
             selected_day,
+            focus: CalendarFocus::DayGrid,
+            selected_task_index: 0,
+            show_completed: false,
         }
     }
 }
@@ -87,6 +107,42 @@ impl CalendarState {
         self.week_start = today - Duration::days(today.weekday().num_days_from_monday() as i64);
         self.selected_day = today.weekday().num_days_from_monday() as usize;
     }
+
+    /// Toggles focus between day grid and task list.
+    pub fn toggle_focus(&mut self) {
+        self.focus = match self.focus {
+            CalendarFocus::DayGrid => CalendarFocus::TaskList,
+            CalendarFocus::TaskList => CalendarFocus::DayGrid,
+        };
+        // Reset task selection when switching to task list
+        if self.focus == CalendarFocus::TaskList {
+            self.selected_task_index = 0;
+        }
+    }
+
+    /// Moves to the previous task in the list.
+    pub fn prev_task(&mut self) {
+        self.selected_task_index = self.selected_task_index.saturating_sub(1);
+    }
+
+    /// Moves to the next task in the list (capped by task_count).
+    pub fn next_task(&mut self, task_count: usize) {
+        if task_count > 0 && self.selected_task_index < task_count - 1 {
+            self.selected_task_index += 1;
+        }
+    }
+
+    /// Resets task selection (call when day changes).
+    pub fn reset_task_selection(&mut self) {
+        self.selected_task_index = 0;
+    }
+
+    /// Toggles showing completed tasks.
+    pub fn toggle_show_completed(&mut self) {
+        self.show_completed = !self.show_completed;
+        // Reset selection when filter changes
+        self.selected_task_index = 0;
+    }
 }
 
 /// Renders the weekly calendar view.
@@ -131,7 +187,7 @@ pub fn render_calendar(frame: &mut Frame, app: &App, area: Rect) {
     render_day_tasks(frame, state, app, chunks[3]);
 
     // Help line
-    render_help_line(frame, chunks[4]);
+    render_help_line(frame, state, chunks[4]);
 }
 
 /// Renders the week header showing the date range.
@@ -319,6 +375,44 @@ fn render_day_card(
     }
 }
 
+/// Gets the IDs of tasks due on the selected day, filtered and sorted.
+///
+/// Returns a vector of task IDs for the currently selected day in the calendar.
+/// Respects the show_completed filter and applies default sort order.
+pub fn get_tasks_for_selected_day(app: &App) -> Vec<String> {
+    let selected_date = app.calendar_state.selected_date();
+    let show_completed = app.calendar_state.show_completed;
+
+    // Filter tasks for the selected date
+    let mut tasks: Vec<&Task> = app
+        .tasks
+        .iter()
+        .filter(|t| {
+            // Must have due date on the selected day
+            let is_on_date = t
+                .due_date
+                .map(|d| d.with_timezone(&Local).date_naive() == selected_date)
+                .unwrap_or(false);
+
+            // Apply completed filter
+            let passes_completed_filter = show_completed
+                || (t.status != TaskStatus::Completed && t.status != TaskStatus::Archived);
+
+            is_on_date && passes_completed_filter
+        })
+        .collect();
+
+    // Sort using default sort order (DueDateAsc, which for same-day tasks falls back to priority)
+    SortOrder::default().apply(&mut tasks);
+
+    tasks.iter().map(|t| t.id.clone()).collect()
+}
+
+/// Gets the count of tasks for the selected day.
+pub fn get_task_count_for_selected_day(app: &App) -> usize {
+    get_tasks_for_selected_day(app).len()
+}
+
 /// Counts tasks due on a specific date.
 fn count_tasks_for_date(app: &App, date: NaiveDate) -> usize {
     app.tasks
@@ -352,19 +446,18 @@ fn has_overdue_tasks_for_date(app: &App, date: NaiveDate) -> bool {
 fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: Rect) {
     let selected_date = state.selected_date();
     let today = Local::now().date_naive();
+    let is_focused = state.focus == CalendarFocus::TaskList;
 
-    // Get tasks for the selected date
-    let tasks: Vec<&Task> = app
-        .tasks
+    // Get filtered and sorted task IDs
+    let task_ids = get_tasks_for_selected_day(app);
+
+    // Get task references in order
+    let tasks: Vec<&Task> = task_ids
         .iter()
-        .filter(|t| {
-            t.due_date
-                .map(|d| d.with_timezone(&Local).date_naive() == selected_date)
-                .unwrap_or(false)
-        })
+        .filter_map(|id| app.tasks.iter().find(|t| &t.id == id))
         .collect();
 
-    // Block title with date
+    // Block title with date and filter status
     let date_str = if selected_date == today {
         "Today".to_string()
     } else if selected_date == today + Duration::days(1) {
@@ -375,59 +468,180 @@ fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: R
         selected_date.format("%A, %B %d").to_string()
     };
 
+    let filter_indicator = if state.show_completed {
+        format!(" {} All ", icons::DOT)
+    } else {
+        format!(" {} Active ", icons::DOT)
+    };
+
+    // Highlight border when task list is focused
+    let border_color = if is_focused {
+        theme::PRIMARY_LIGHT
+    } else {
+        theme::BORDER
+    };
+
+    let title_style = if is_focused {
+        Style::default()
+            .fg(theme::PRIMARY_LIGHT)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_PRIMARY)
+    };
+
+    let title = Line::from(vec![
+        Span::styled(format!(" {} ", date_str), title_style),
+        Span::styled(filter_indicator, Style::default().fg(theme::TEXT_MUTED)),
+    ]);
+
     let block = Block::default()
-        .title(Span::styled(
-            format!(" Tasks for {} ", date_str),
-            Style::default().fg(theme::TEXT_PRIMARY),
-        ))
+        .title(title)
         .borders(Borders::ALL)
         .border_set(border::ROUNDED)
-        .border_style(Style::default().fg(theme::BORDER));
+        .border_style(Style::default().fg(border_color));
 
     if tasks.is_empty() {
-        let empty_msg = Paragraph::new("No tasks due on this day")
+        let empty_msg = if is_focused {
+            "No tasks - press Tab to return to calendar"
+        } else {
+            "No tasks due on this day"
+        };
+        let msg = Paragraph::new(empty_msg)
             .style(Style::default().fg(theme::TEXT_MUTED))
             .alignment(Alignment::Center)
             .block(block);
-        frame.render_widget(empty_msg, area);
+        frame.render_widget(msg, area);
         return;
     }
 
-    // Build task list
+    // Calculate available width for title
+    let inner_width = area.width.saturating_sub(4); // Border padding
+
+    // Build task list with selection highlighting - matching main task list style
     let items: Vec<ListItem> = tasks
         .iter()
-        .map(|task| {
-            let checkbox = match task.status {
-                TaskStatus::Pending => "[ ]",
-                TaskStatus::InProgress => "[▸]",
-                TaskStatus::Completed | TaskStatus::Archived => "[✓]",
+        .enumerate()
+        .map(|(idx, task)| {
+            let is_selected = is_focused && idx == state.selected_task_index;
+
+            // Status indicator with themed icons
+            let (status_icon, status_style) = match task.status {
+                TaskStatus::Pending => (
+                    icons::CHECKBOX_EMPTY,
+                    Style::default().fg(theme::STATUS_PENDING),
+                ),
+                TaskStatus::InProgress => (
+                    icons::CHECKBOX_PROGRESS,
+                    Style::default().fg(theme::STATUS_IN_PROGRESS),
+                ),
+                TaskStatus::Completed => (
+                    icons::CHECKBOX_DONE,
+                    Style::default().fg(theme::STATUS_COMPLETED),
+                ),
+                TaskStatus::Archived => (
+                    icons::CHECKBOX_ARCHIVED,
+                    Style::default().fg(theme::STATUS_ARCHIVED),
+                ),
             };
 
-            let priority_indicator = match task.priority {
-                Priority::Urgent => ("!!", theme::PRIORITY_URGENT),
-                Priority::High => ("! ", theme::PRIORITY_HIGH),
-                Priority::Medium => ("  ", theme::TEXT_PRIMARY),
-                Priority::Low => ("↓ ", theme::PRIORITY_LOW),
+            // Priority indicator with themed styling
+            let (priority_icon, priority_style) = match task.priority {
+                Priority::Urgent => (
+                    icons::PRIORITY_URGENT,
+                    Style::default()
+                        .fg(theme::PRIORITY_URGENT)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Priority::High => (icons::PRIORITY_HIGH, Style::default().fg(theme::PRIORITY_HIGH)),
+                Priority::Medium => (" ", Style::default()),
+                Priority::Low => (icons::PRIORITY_LOW, Style::default().fg(theme::PRIORITY_LOW)),
             };
 
-            let title_style = if task.status == TaskStatus::Completed {
+            // Completion date for completed tasks
+            let completed_str = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
+                task.completed_at
+                    .map(|d| format!(" {} {}", icons::CHECK, format_relative_date(d)))
+            } else {
+                None
+            };
+
+            // Format tags string
+            let tags_str = render_tags(&task.tags, 15);
+
+            // Format project string
+            let project_str = task
+                .project_id
+                .as_ref()
+                .and_then(|pid| app.projects.iter().find(|p| &p.id == pid))
+                .map(|p| format!("{}{}", icons::PROJECT_PREFIX, p.name));
+
+            // Calculate available width for title
+            let meta_width = project_str.as_ref().map(|s| s.len() + 1).unwrap_or(0)
+                + if !tags_str.is_empty() { tags_str.len() + 1 } else { 0 }
+                + completed_str.as_ref().map(|s| s.len() + 1).unwrap_or(0);
+            let fixed_width = 3 + 2 + meta_width + 2; // status + priority + meta + padding
+            let title_width = (inner_width as usize).saturating_sub(fixed_width).max(10);
+
+            // Truncate title if needed
+            let title = if task.title.len() > title_width {
+                format!("{}...", &task.title[..title_width.saturating_sub(3)])
+            } else {
+                task.title.clone()
+            };
+
+            // Title style based on task state
+            let base_title_style = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
                 Style::default().fg(theme::TEXT_COMPLETED)
             } else if task.is_overdue() {
-                Style::default().fg(theme::ERROR)
+                Style::default().fg(theme::DUE_OVERDUE)
             } else {
                 Style::default().fg(theme::TEXT_PRIMARY)
             };
 
-            let line = Line::from(vec![
-                Span::styled(format!("{} ", checkbox), title_style),
-                Span::styled(
-                    priority_indicator.0,
-                    Style::default().fg(priority_indicator.1),
-                ),
-                Span::styled(task.title.clone(), title_style),
-            ]);
+            // Apply selection background
+            let (title_style, status_style, priority_style, project_style, tag_style, completed_style) = if is_selected {
+                (
+                    base_title_style.bg(theme::BG_SELECTION).add_modifier(Modifier::BOLD),
+                    status_style.bg(theme::BG_SELECTION),
+                    priority_style.bg(theme::BG_SELECTION),
+                    Style::default().fg(theme::PROJECT).bg(theme::BG_SELECTION),
+                    Style::default().fg(theme::TAG).bg(theme::BG_SELECTION),
+                    Style::default().fg(theme::TEXT_COMPLETED).bg(theme::BG_SELECTION),
+                )
+            } else {
+                (
+                    base_title_style,
+                    status_style,
+                    priority_style,
+                    Style::default().fg(theme::PROJECT),
+                    Style::default().fg(theme::TAG),
+                    Style::default().fg(theme::TEXT_COMPLETED),
+                )
+            };
 
-            ListItem::new(line)
+            // Build the line with spans
+            let mut spans = vec![
+                Span::styled(format!(" {} ", status_icon), status_style),
+                Span::styled(format!("{} ", priority_icon), priority_style),
+                Span::styled(format!("{:<width$}", title, width = title_width), title_style),
+            ];
+
+            // Add project name if present
+            if let Some(ref project) = project_str {
+                spans.push(Span::styled(format!(" {}", project), project_style));
+            }
+
+            // Add tags if present
+            if !tags_str.is_empty() {
+                spans.push(Span::styled(format!(" {}", tags_str), tag_style));
+            }
+
+            // Add completion date if present
+            if let Some(ref completed) = completed_str {
+                spans.push(Span::styled(completed.clone(), completed_style));
+            }
+
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -435,18 +649,59 @@ fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: R
     frame.render_widget(list, area);
 }
 
-/// Renders the help line.
-fn render_help_line(frame: &mut Frame, area: Rect) {
-    let help = Line::from(vec![
-        Span::styled("[←/→]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
-        Span::styled(" Day  ", Style::default().fg(theme::TEXT_MUTED)),
-        Span::styled("[↑/↓]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
-        Span::styled(" Week  ", Style::default().fg(theme::TEXT_MUTED)),
-        Span::styled("[t]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
-        Span::styled(" Today  ", Style::default().fg(theme::TEXT_MUTED)),
-        Span::styled("[Esc]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
-        Span::styled(" Back", Style::default().fg(theme::TEXT_MUTED)),
-    ]);
+/// Renders tags as a formatted string with themed prefix.
+fn render_tags(tags: &[String], max_width: usize) -> String {
+    if tags.is_empty() {
+        return String::new();
+    }
+
+    let tag_str: String = tags
+        .iter()
+        .map(|t| format!("{}{}", icons::TAG_PREFIX, t))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if tag_str.len() > max_width {
+        format!("{}...", &tag_str[..max_width.saturating_sub(3)])
+    } else {
+        tag_str
+    }
+}
+
+/// Renders the help line based on current focus.
+fn render_help_line(frame: &mut Frame, state: &CalendarState, area: Rect) {
+    let help = match state.focus {
+        CalendarFocus::DayGrid => Line::from(vec![
+            Span::styled("[←/→]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Day  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[↑/↓]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Week  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[t]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Today  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[f]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Filter  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[Tab]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Tasks  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[Esc]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Back", Style::default().fg(theme::TEXT_MUTED)),
+        ]),
+        CalendarFocus::TaskList => Line::from(vec![
+            Span::styled("[j/k]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Nav  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[Space]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Done  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[p]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Priority  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[e]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Edit  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[f]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Filter  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[Enter]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Go  ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("[Tab]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled(" Cal", Style::default().fg(theme::TEXT_MUTED)),
+        ]),
+    };
 
     frame.render_widget(Paragraph::new(help), area);
 }
