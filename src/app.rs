@@ -365,6 +365,14 @@ impl App {
             .count()
     }
 
+    /// Returns the count of completed tasks.
+    pub fn completed_count(&self) -> usize {
+        self.tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count()
+    }
+
     /// Returns the task count for a specific tag.
     pub fn task_count_for_tag(&self, tag_name: &str) -> usize {
         self.tasks

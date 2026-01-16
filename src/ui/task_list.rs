@@ -75,11 +75,15 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    // Create list with selection state
+    // Create list with selection state - spotlight effect
     let list = List::new(items)
         .block(block)
-        .highlight_style(Style::default().bg(theme::BG_SELECTION))
-        .highlight_symbol(format!("{} ", icons::SELECTOR));
+        .highlight_style(
+            Style::default()
+                .bg(theme::BG_SELECTION)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▌ ");
 
     // Render with state for selection highlighting
     let mut state = ListState::default();
@@ -88,26 +92,32 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
-/// Renders an inspiring empty state.
+/// Renders an inspiring empty state with visual design.
 fn render_empty_state(frame: &mut Frame, block: Block, area: Rect) {
     let empty_text = vec![
         Line::from(""),
-        Line::from(""),
         Line::from(Span::styled(
-            icons::SPARKLE,
-            Style::default().fg(theme::PRIMARY),
+            "┌─────────────────────────┐",
+            Style::default().fg(theme::BORDER_MUTED),
         )),
-        Line::from(""),
+        Line::from(vec![
+            Span::styled("│     ", Style::default().fg(theme::BORDER_MUTED)),
+            Span::styled("✦ ✦ ✦", Style::default().fg(theme::PRIMARY)),
+            Span::styled("     │", Style::default().fg(theme::BORDER_MUTED)),
+        ]),
+        Line::from(vec![
+            Span::styled("│   ", Style::default().fg(theme::BORDER_MUTED)),
+            Span::styled("Ready to go!", Style::default().fg(theme::TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
+            Span::styled("   │", Style::default().fg(theme::BORDER_MUTED)),
+        ]),
         Line::from(Span::styled(
-            "Your task list is empty",
-            Style::default()
-                .fg(theme::TEXT_SECONDARY)
-                .add_modifier(Modifier::BOLD),
+            "└─────────────────────────┘",
+            Style::default().fg(theme::BORDER_MUTED),
         )),
         Line::from(""),
         Line::from(vec![
             Span::styled("Press ", Style::default().fg(theme::TEXT_MUTED)),
-            Span::styled("a", Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(" a ", Style::default().fg(theme::BG_DARK).bg(theme::ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled(" to add your first task", Style::default().fg(theme::TEXT_MUTED)),
         ]),
     ];
