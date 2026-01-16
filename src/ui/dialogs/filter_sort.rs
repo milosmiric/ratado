@@ -5,14 +5,15 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
+use super::{centered_rect, dialog_block, field_block, hint_style, selected_style, DialogAction};
 use crate::models::{Filter, SortOrder, Task};
-use crate::ui::dialogs::{centered_rect, DialogAction};
+use crate::ui::theme;
 
 /// Which section of the dialog is focused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -170,18 +171,15 @@ impl FilterSortDialog {
         let dialog_height = 18.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background dim effect
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Render dialog box
-        let block = Block::default()
-            .title(" Filter & Sort ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
-
+        // Render dialog box with themed styling
+        let block = dialog_block("Filter & Sort", false);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -201,17 +199,7 @@ impl FilterSortDialog {
 
     fn render_filter_column(&self, frame: &mut Frame, area: Rect) {
         let is_focused = self.section == FilterSortSection::Filter;
-        let border_style = if is_focused {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .title(" Filter ")
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let block = field_block("Filter", is_focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -220,22 +208,19 @@ impl FilterSortDialog {
             let is_selected = i == self.filter_index;
             let count = self.filter_counts.get(i).copied().unwrap_or(0);
             let style = if is_selected && is_focused {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                selected_style()
             } else if is_selected {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme::ACCENT)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme::TEXT_PRIMARY)
             };
 
             let count_style = if is_selected && is_focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                selected_style()
             } else {
-                Style::default().fg(Color::DarkGray)
+                hint_style()
             };
 
             let prefix = if is_selected { "▶ " } else { "  " };
@@ -249,7 +234,7 @@ impl FilterSortDialog {
             if is_selected {
                 lines.push(Line::from(Span::styled(
                     format!("    {}", desc),
-                    Style::default().fg(Color::DarkGray),
+                    hint_style(),
                 )));
             }
         }
@@ -260,17 +245,7 @@ impl FilterSortDialog {
 
     fn render_sort_column(&self, frame: &mut Frame, area: Rect) {
         let is_focused = self.section == FilterSortSection::Sort;
-        let border_style = if is_focused {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .title(" Sort ")
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let block = field_block("Sort", is_focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -278,16 +253,13 @@ impl FilterSortDialog {
         for (i, (_, name, desc)) in Self::SORTS.iter().enumerate() {
             let is_selected = i == self.sort_index;
             let style = if is_selected && is_focused {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                selected_style()
             } else if is_selected {
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(theme::ACCENT)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme::TEXT_PRIMARY)
             };
 
             let prefix = if is_selected { "▶ " } else { "  " };
@@ -300,7 +272,7 @@ impl FilterSortDialog {
             if is_selected {
                 lines.push(Line::from(Span::styled(
                     format!("    {}", desc),
-                    Style::default().fg(Color::DarkGray),
+                    hint_style(),
                 )));
             }
         }
@@ -309,7 +281,7 @@ impl FilterSortDialog {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "Tab:switch  ↑↓:select  Enter:apply",
-            Style::default().fg(Color::DarkGray),
+            hint_style(),
         )));
 
         let paragraph = Paragraph::new(lines);

@@ -43,7 +43,7 @@ use ratatui::{
     layout::{Alignment, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph, Widget},
     Frame,
 };
 
@@ -61,6 +61,11 @@ pub const MIN_HEIGHT: u16 = 20;
 /// If a dialog is active, it renders on top of the main view.
 pub fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
+
+    // Apply consistent dark background to entire terminal area
+    // This ensures the app looks the same regardless of terminal theme
+    let background = Block::default().style(Style::default().bg(theme::BG_DARK));
+    background.render(area, frame.buffer_mut());
 
     // Check minimum terminal size
     if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {

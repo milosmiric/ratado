@@ -6,13 +6,14 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
     Frame,
 };
 
-use crate::ui::dialogs::{centered_rect, DialogAction};
+use super::{centered_rect, dialog_block, hint_style, DialogAction};
+use crate::ui::theme;
 
 /// Action to take with tasks when deleting a project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -112,18 +113,15 @@ impl DeleteProjectDialog {
         let dialog_height = 14.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Dialog box
-        let block = Block::default()
-            .title(" Delete Project ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red))
-            .style(Style::default().bg(Color::Black));
-
+        // Dialog box with destructive styling
+        let block = dialog_block("Delete Project", true);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -151,16 +149,16 @@ impl DeleteProjectDialog {
             self.project_name, task_text
         );
         let message_widget = Paragraph::new(message)
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(theme::TEXT_PRIMARY))
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
         frame.render_widget(message_widget, chunks[0]);
 
         // Options
         let options = [
-            (DeleteProjectChoice::MoveToInbox, "Move tasks to Inbox", "m", Color::Green),
-            (DeleteProjectChoice::DeleteTasks, "Delete all tasks", "d", Color::Red),
-            (DeleteProjectChoice::Cancel, "Cancel", "c", Color::Gray),
+            (DeleteProjectChoice::MoveToInbox, "Move tasks to Inbox", "m", theme::SUCCESS),
+            (DeleteProjectChoice::DeleteTasks, "Delete all tasks", "d", theme::ERROR),
+            (DeleteProjectChoice::Cancel, "Cancel", "c", theme::TEXT_MUTED),
         ];
 
         for (i, (choice, label, key, color)) in options.iter().enumerate() {
@@ -168,11 +166,11 @@ impl DeleteProjectDialog {
 
             let style = if is_selected {
                 Style::default()
-                    .fg(Color::Black)
+                    .fg(theme::TEXT_PRIMARY)
                     .bg(*color)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme::TEXT_MUTED)
             };
 
             let key_style = Style::default()
@@ -193,7 +191,7 @@ impl DeleteProjectDialog {
 
         // Hint
         let hint = Paragraph::new("j/k to navigate, Enter to confirm")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(hint_style())
             .alignment(Alignment::Center);
         frame.render_widget(hint, chunks[6]);
     }

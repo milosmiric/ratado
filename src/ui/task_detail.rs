@@ -6,7 +6,8 @@
 use chrono::{DateTime, Local, Utc};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
@@ -15,6 +16,7 @@ use ratatui::{
 use crate::app::App;
 use crate::models::{Priority, Task, TaskStatus};
 use crate::utils::format_relative_date;
+use super::theme;
 
 /// Renders the task detail view.
 ///
@@ -27,11 +29,14 @@ pub fn render_task_detail(frame: &mut Frame, app: &App, area: Rect) {
         None => {
             // If no task is selected, show a message
             let msg = Paragraph::new("No task selected")
-                .style(Style::default().fg(Color::DarkGray))
+                .style(Style::default().fg(theme::TEXT_MUTED))
                 .block(
                     Block::default()
                         .title(" Task Detail ")
-                        .borders(Borders::ALL),
+                        .borders(Borders::ALL)
+                        .border_set(border::ROUNDED)
+                        .border_style(Style::default().fg(theme::BORDER))
+                        .style(Style::default().bg(theme::BG_ELEVATED)),
                 );
             frame.render_widget(msg, area);
             return;
@@ -43,11 +48,13 @@ pub fn render_task_detail(frame: &mut Frame, app: &App, area: Rect) {
         .title(Span::styled(
             " Task Detail ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme::PRIMARY_LIGHT)
                 .add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::PRIMARY_LIGHT))
+        .style(Style::default().bg(theme::BG_ELEVATED));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -96,12 +103,10 @@ pub fn render_task_detail(frame: &mut Frame, app: &App, area: Rect) {
 /// Renders the task title.
 fn render_title(frame: &mut Frame, task: &Task, area: Rect) {
     let style = if task.status == TaskStatus::Completed {
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::CROSSED_OUT)
+        Style::default().fg(theme::TEXT_COMPLETED)
     } else {
         Style::default()
-            .fg(Color::White)
+            .fg(theme::TEXT_PRIMARY)
             .add_modifier(Modifier::BOLD)
     };
 
@@ -121,14 +126,14 @@ fn render_status_priority(frame: &mut Frame, task: &Task, area: Rect) {
 
     // Status
     let (status_icon, status_text, status_color) = match task.status {
-        TaskStatus::Pending => ("○", "Pending", Color::Yellow),
-        TaskStatus::InProgress => ("◐", "In Progress", Color::Blue),
-        TaskStatus::Completed => ("●", "Completed", Color::Green),
-        TaskStatus::Archived => ("◌", "Archived", Color::DarkGray),
+        TaskStatus::Pending => ("○", "Pending", theme::STATUS_PENDING),
+        TaskStatus::InProgress => ("◐", "In Progress", theme::STATUS_IN_PROGRESS),
+        TaskStatus::Completed => ("●", "Completed", theme::STATUS_COMPLETED),
+        TaskStatus::Archived => ("◌", "Archived", theme::STATUS_ARCHIVED),
     };
 
     let status = Paragraph::new(Line::from(vec![
-        Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Status: ", Style::default().fg(theme::TEXT_MUTED)),
         Span::styled(
             format!("{} {}", status_icon, status_text),
             Style::default().fg(status_color).add_modifier(Modifier::BOLD),
@@ -138,14 +143,14 @@ fn render_status_priority(frame: &mut Frame, task: &Task, area: Rect) {
 
     // Priority
     let (priority_icon, priority_text, priority_color) = match task.priority {
-        Priority::Urgent => ("!!", "Urgent", Color::Red),
-        Priority::High => ("!", "High", Color::Yellow),
-        Priority::Medium => ("−", "Medium", Color::White),
-        Priority::Low => ("↓", "Low", Color::DarkGray),
+        Priority::Urgent => ("!!", "Urgent", theme::PRIORITY_URGENT),
+        Priority::High => ("!", "High", theme::PRIORITY_HIGH),
+        Priority::Medium => ("−", "Medium", theme::TEXT_PRIMARY),
+        Priority::Low => ("↓", "Low", theme::PRIORITY_LOW),
     };
 
     let priority = Paragraph::new(Line::from(vec![
-        Span::styled("Priority: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Priority: ", Style::default().fg(theme::TEXT_MUTED)),
         Span::styled(
             format!("{} {}", priority_icon, priority_text),
             Style::default()
@@ -169,16 +174,16 @@ fn render_due_project(frame: &mut Frame, task: &Task, app: &App, area: Rect) {
             let formatted = format_relative_date(*date);
             let full_date = date.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string();
             let color = if task.is_overdue() {
-                Color::Red
+                theme::DUE_OVERDUE
             } else if task.is_due_today() {
-                Color::Yellow
+                theme::DUE_TODAY
             } else if task.is_due_this_week() {
-                Color::Cyan
+                theme::DUE_WEEK
             } else {
-                Color::White
+                theme::TEXT_PRIMARY
             };
             Line::from(vec![
-                Span::styled("Due: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Due: ", Style::default().fg(theme::TEXT_MUTED)),
                 Span::styled(
                     format!("{} ({})", formatted, full_date),
                     Style::default().fg(color),
@@ -186,8 +191,8 @@ fn render_due_project(frame: &mut Frame, task: &Task, app: &App, area: Rect) {
             ])
         }
         None => Line::from(vec![
-            Span::styled("Due: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Not set", Style::default().fg(Color::DarkGray)),
+            Span::styled("Due: ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("Not set", Style::default().fg(theme::TEXT_MUTED)),
         ]),
     };
     frame.render_widget(Paragraph::new(due_text), chunks[0]);
@@ -201,10 +206,10 @@ fn render_due_project(frame: &mut Frame, task: &Task, app: &App, area: Rect) {
         .unwrap_or_else(|| "None".to_string());
 
     let project = Paragraph::new(Line::from(vec![
-        Span::styled("Project: ", Style::default().fg(Color::DarkGray)),
+        Span::styled("Project: ", Style::default().fg(theme::TEXT_MUTED)),
         Span::styled(
             format!("@{}", project_name),
-            Style::default().fg(Color::Blue),
+            Style::default().fg(theme::PROJECT),
         ),
     ]));
     frame.render_widget(project, chunks[1]);
@@ -214,18 +219,18 @@ fn render_due_project(frame: &mut Frame, task: &Task, app: &App, area: Rect) {
 fn render_tags(frame: &mut Frame, task: &Task, area: Rect) {
     let tags_line = if task.tags.is_empty() {
         Line::from(vec![
-            Span::styled("Tags: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("None", Style::default().fg(Color::DarkGray)),
+            Span::styled("Tags: ", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled("None", Style::default().fg(theme::TEXT_MUTED)),
         ])
     } else {
-        let mut spans = vec![Span::styled("Tags: ", Style::default().fg(Color::DarkGray))];
+        let mut spans = vec![Span::styled("Tags: ", Style::default().fg(theme::TEXT_MUTED))];
         for (i, tag) in task.tags.iter().enumerate() {
             if i > 0 {
                 spans.push(Span::raw(" "));
             }
             spans.push(Span::styled(
                 format!("#{}", tag),
-                Style::default().fg(Color::Magenta),
+                Style::default().fg(theme::TAG),
             ));
         }
         Line::from(spans)
@@ -239,17 +244,18 @@ fn render_description(frame: &mut Frame, task: &Task, area: Rect) {
     let block = Block::default()
         .title(Span::styled(
             " Description ",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::TEXT_SECONDARY),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::BORDER));
 
     let content = task.description.as_deref().unwrap_or("No description");
 
     let style = if task.description.is_some() {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme::TEXT_PRIMARY)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme::TEXT_MUTED)
     };
 
     let description = Paragraph::new(content)
@@ -266,11 +272,11 @@ fn render_timestamps(frame: &mut Frame, task: &Task, area: Rect) {
     let updated = format_timestamp(task.updated_at);
 
     let line = Line::from(vec![
-        Span::styled("Created: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(created, Style::default().fg(Color::DarkGray)),
-        Span::raw("  │  "),
-        Span::styled("Updated: ", Style::default().fg(Color::DarkGray)),
-        Span::styled(updated, Style::default().fg(Color::DarkGray)),
+        Span::styled("Created: ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled(created, Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("  │  ", Style::default().fg(theme::BORDER)),
+        Span::styled("Updated: ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled(updated, Style::default().fg(theme::TEXT_MUTED)),
     ]);
 
     frame.render_widget(Paragraph::new(line), area);
@@ -286,20 +292,17 @@ fn format_timestamp(dt: DateTime<Utc>) -> String {
 /// Renders the help line showing available actions.
 fn render_help_line(frame: &mut Frame, area: Rect) {
     let help = Line::from(vec![
-        Span::styled("[Space]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Toggle  "),
-        Span::styled("[p]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Priority  "),
-        Span::styled("[e]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Edit  "),
-        Span::styled("[d]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Delete  "),
-        Span::styled("[Esc]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Back"),
+        Span::styled("[Space]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Toggle  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[p]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Priority  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[e]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Edit  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[d]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Delete  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[Esc]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Back", Style::default().fg(theme::TEXT_MUTED)),
     ]);
 
-    frame.render_widget(
-        Paragraph::new(help).style(Style::default().fg(Color::DarkGray)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(help), area);
 }

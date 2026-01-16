@@ -37,10 +37,14 @@ pub use settings::{SettingsDialog, SettingsOption};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Flex, Layout, Rect},
-    style::{Color, Style},
+    style::{Modifier, Style},
+    symbols::border,
+    text::Span,
     widgets::{Block, Borders, Clear, Widget},
     Frame,
 };
+
+use super::theme;
 
 /// Actions that can result from dialog interaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,21 +109,99 @@ pub fn render_dialog_background(area: Rect, buf: &mut Buffer) {
     // Clear the area first
     Clear.render(area, buf);
 
-    // Fill with dim background
+    // Fill with dim background using theme color
     for y in area.y..area.y + area.height {
         for x in area.x..area.x + area.width {
-            buf[(x, y)].set_style(Style::default().bg(Color::Black));
+            buf[(x, y)].set_style(Style::default().bg(theme::BG_DARK));
         }
     }
 }
 
-/// Renders a dialog box with border.
+/// Renders a themed dialog box with rounded corners.
 pub fn render_dialog_box(area: Rect, buf: &mut Buffer, title: &str) {
-    let block = Block::default()
-        .title(format!(" {} ", title))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan))
-        .style(Style::default().bg(Color::Black));
-
+    let block = dialog_block(title, false);
     block.render(area, buf);
+}
+
+/// Creates a themed dialog block with optional destructive styling.
+pub fn dialog_block(title: &str, destructive: bool) -> Block<'static> {
+    let border_color = if destructive {
+        theme::ERROR
+    } else {
+        theme::PRIMARY_LIGHT
+    };
+
+    let title_style = Style::default()
+        .fg(border_color)
+        .add_modifier(Modifier::BOLD);
+
+    Block::default()
+        .title(Span::styled(format!(" {} ", title), title_style))
+        .borders(Borders::ALL)
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(theme::BG_ELEVATED))
+}
+
+/// Creates a themed block for dialog sections/fields.
+pub fn field_block(label: &str, focused: bool) -> Block<'static> {
+    let border_color = if focused {
+        theme::PRIMARY_LIGHT
+    } else {
+        theme::BORDER
+    };
+
+    let label_style = if focused {
+        Style::default()
+            .fg(theme::PRIMARY_LIGHT)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(theme::TEXT_MUTED)
+    };
+
+    Block::default()
+        .title(Span::styled(format!(" {} ", label), label_style))
+        .borders(Borders::ALL)
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(border_color))
+}
+
+/// Style for selected/highlighted items in dialogs.
+pub fn selected_style() -> Style {
+    Style::default()
+        .bg(theme::BG_SELECTION)
+        .fg(theme::TEXT_PRIMARY)
+        .add_modifier(Modifier::BOLD)
+}
+
+/// Style for unselected items in dialogs.
+pub fn unselected_style() -> Style {
+    Style::default().fg(theme::TEXT_SECONDARY)
+}
+
+/// Style for muted/hint text in dialogs.
+pub fn hint_style() -> Style {
+    Style::default().fg(theme::TEXT_MUTED)
+}
+
+/// Style for focused buttons.
+pub fn button_focused_style() -> Style {
+    Style::default()
+        .bg(theme::PRIMARY)
+        .fg(theme::TEXT_PRIMARY)
+        .add_modifier(Modifier::BOLD)
+}
+
+/// Style for unfocused buttons.
+pub fn button_style() -> Style {
+    Style::default()
+        .fg(theme::TEXT_SECONDARY)
+}
+
+/// Style for destructive/danger buttons when focused.
+pub fn button_danger_style() -> Style {
+    Style::default()
+        .bg(theme::ERROR)
+        .fg(theme::TEXT_PRIMARY)
+        .add_modifier(Modifier::BOLD)
 }

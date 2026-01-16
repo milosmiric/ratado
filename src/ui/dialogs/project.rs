@@ -8,13 +8,16 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
+use super::{
+    button_focused_style, button_style, centered_rect, dialog_block, field_block, DialogAction,
+};
 use crate::models::Project;
-use crate::ui::dialogs::{centered_rect, DialogAction};
 use crate::ui::input::TextInput;
+use crate::ui::theme;
 
 /// Preset colors for projects.
 const PROJECT_COLORS: &[(&str, &str)] = &[
@@ -256,18 +259,15 @@ impl ProjectDialog {
         let dialog_height = 14.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background dim effect
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Render dialog box
-        let block = Block::default()
-            .title(format!(" {} ", self.dialog_title))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
-
+        // Render dialog box with themed styling
+        let block = dialog_block(&self.dialog_title, false);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -302,17 +302,7 @@ impl ProjectDialog {
 
     /// Renders the color selector.
     fn render_color_selector(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border_style = if focused {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .title(" Color ")
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let block = field_block("Color", focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -327,7 +317,7 @@ impl ProjectDialog {
             let style = if i == self.selected_color {
                 Style::default()
                     .bg(color)
-                    .fg(Color::White)
+                    .fg(theme::TEXT_PRIMARY)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().bg(color)
@@ -342,17 +332,7 @@ impl ProjectDialog {
 
     /// Renders the icon selector.
     fn render_icon_selector(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border_style = if focused {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .title(" Icon ")
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let block = field_block("Icon", focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -365,10 +345,10 @@ impl ProjectDialog {
 
             let style = if i == self.selected_icon {
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme::PRIMARY_LIGHT)
                     .add_modifier(Modifier::BOLD | Modifier::REVERSED)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme::TEXT_MUTED)
             };
 
             spans.push(Span::styled(format!(" {} ", icon), style));
@@ -387,12 +367,9 @@ impl ProjectDialog {
         };
 
         let style = if focused {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Green)
-                .add_modifier(Modifier::BOLD)
+            button_focused_style()
         } else {
-            Style::default().fg(Color::Green)
+            button_style().fg(theme::SUCCESS)
         };
 
         // Center the button

@@ -6,7 +6,8 @@
 use chrono::{Datelike, Duration, Local, NaiveDate};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
@@ -14,6 +15,7 @@ use ratatui::{
 
 use crate::app::App;
 use crate::models::{Priority, Task, TaskStatus};
+use super::theme;
 
 /// State for the calendar view.
 ///
@@ -95,11 +97,13 @@ pub fn render_calendar(frame: &mut Frame, app: &App, area: Rect) {
         .title(Span::styled(
             " Weekly Calendar ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme::PRIMARY_LIGHT)
                 .add_modifier(Modifier::BOLD),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::PRIMARY_LIGHT))
+        .style(Style::default().bg(theme::BG_ELEVATED));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -163,10 +167,10 @@ fn render_week_header(frame: &mut Frame, state: &CalendarState, area: Rect) {
     let contains_today = today >= state.week_start && today <= week_end;
     let header_style = if contains_today {
         Style::default()
-            .fg(Color::Cyan)
+            .fg(theme::PRIMARY_LIGHT)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme::TEXT_PRIMARY)
     };
 
     let header_widget = Paragraph::new(header)
@@ -235,17 +239,18 @@ fn render_day_card(
 ) {
     // Determine styling
     let (border_color, bg_color) = if is_selected {
-        (Color::Cyan, Some(Color::Rgb(30, 60, 90)))
+        (theme::PRIMARY_LIGHT, Some(theme::BG_SELECTION))
     } else if is_today {
-        (Color::Yellow, None)
+        (theme::ACCENT, None)
     } else if is_weekend {
-        (Color::DarkGray, None)
+        (theme::BORDER_MUTED, None)
     } else {
-        (Color::White, None)
+        (theme::BORDER, None)
     };
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_set(border::ROUNDED)
         .border_style(Style::default().fg(border_color));
 
     let inner = block.inner(area);
@@ -269,9 +274,9 @@ fn render_day_card(
 
     // Day name
     let name_style = if is_weekend {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(theme::TEXT_MUTED)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme::TEXT_SECONDARY)
     };
     let name_widget = Paragraph::new(day_name)
         .style(name_style)
@@ -281,14 +286,14 @@ fn render_day_card(
     // Day number
     let num_style = if is_today {
         Style::default()
-            .fg(Color::Yellow)
+            .fg(theme::ACCENT)
             .add_modifier(Modifier::BOLD)
     } else if is_selected {
         Style::default()
-            .fg(Color::Cyan)
+            .fg(theme::PRIMARY_LIGHT)
             .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme::TEXT_PRIMARY)
     };
     let num_widget = Paragraph::new(format!("{}", day_num))
         .style(num_style)
@@ -298,9 +303,9 @@ fn render_day_card(
     // Task indicator
     if task_count > 0 {
         let indicator_color = if has_overdue {
-            Color::Red
+            theme::ERROR
         } else {
-            Color::Green
+            theme::SUCCESS
         };
         let indicator = if task_count <= 3 {
             "●".repeat(task_count)
@@ -373,14 +378,15 @@ fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: R
     let block = Block::default()
         .title(Span::styled(
             format!(" Tasks for {} ", date_str),
-            Style::default().fg(Color::White),
+            Style::default().fg(theme::TEXT_PRIMARY),
         ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::BORDER));
 
     if tasks.is_empty() {
         let empty_msg = Paragraph::new("No tasks due on this day")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(Style::default().fg(theme::TEXT_MUTED))
             .alignment(Alignment::Center)
             .block(block);
         frame.render_widget(empty_msg, area);
@@ -398,20 +404,18 @@ fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: R
             };
 
             let priority_indicator = match task.priority {
-                Priority::Urgent => ("!!", Color::Red),
-                Priority::High => ("! ", Color::Yellow),
-                Priority::Medium => ("  ", Color::White),
-                Priority::Low => ("↓ ", Color::DarkGray),
+                Priority::Urgent => ("!!", theme::PRIORITY_URGENT),
+                Priority::High => ("! ", theme::PRIORITY_HIGH),
+                Priority::Medium => ("  ", theme::TEXT_PRIMARY),
+                Priority::Low => ("↓ ", theme::PRIORITY_LOW),
             };
 
             let title_style = if task.status == TaskStatus::Completed {
-                Style::default()
-                    .fg(Color::DarkGray)
-                    .add_modifier(Modifier::CROSSED_OUT)
+                Style::default().fg(theme::TEXT_COMPLETED)
             } else if task.is_overdue() {
-                Style::default().fg(Color::Red)
+                Style::default().fg(theme::ERROR)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme::TEXT_PRIMARY)
             };
 
             let line = Line::from(vec![
@@ -434,20 +438,17 @@ fn render_day_tasks(frame: &mut Frame, state: &CalendarState, app: &App, area: R
 /// Renders the help line.
 fn render_help_line(frame: &mut Frame, area: Rect) {
     let help = Line::from(vec![
-        Span::styled("[←/→]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Day  "),
-        Span::styled("[↑/↓]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Week  "),
-        Span::styled("[t]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Today  "),
-        Span::styled("[Esc]", Style::default().fg(Color::Cyan)),
-        Span::raw(" Back"),
+        Span::styled("[←/→]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Day  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[↑/↓]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Week  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[t]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Today  ", Style::default().fg(theme::TEXT_MUTED)),
+        Span::styled("[Esc]", Style::default().fg(theme::PRIMARY_LIGHT).add_modifier(Modifier::BOLD)),
+        Span::styled(" Back", Style::default().fg(theme::TEXT_MUTED)),
     ]);
 
-    frame.render_widget(
-        Paragraph::new(help).style(Style::default().fg(Color::DarkGray)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(help), area);
 }
 
 #[cfg(test)]

@@ -4,7 +4,8 @@
 
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
+    symbols::border,
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -12,6 +13,7 @@ use ratatui::{
 
 use crate::models::{Priority, Task, TaskStatus};
 use crate::utils::format_relative_date;
+use super::theme;
 
 /// A search result with match information.
 #[derive(Debug, Clone)]
@@ -136,9 +138,14 @@ fn render_search_input_with_context(
     };
 
     let block = Block::default()
-        .title(title)
+        .title(Span::styled(
+            title,
+            Style::default().fg(theme::INFO).add_modifier(Modifier::BOLD),
+        ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::INFO))
+        .style(Style::default().bg(theme::BG_ELEVATED));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -150,16 +157,16 @@ fn render_search_input_with_context(
     for (i, c) in display_text.chars().enumerate() {
         let style = if i == cursor_pos + 1 {
             // Cursor position (offset by 1 for the '/')
-            Style::default().bg(Color::Yellow).fg(Color::Black)
+            Style::default().bg(theme::ACCENT).fg(theme::BG_DARK)
         } else {
-            Style::default().fg(Color::White)
+            Style::default().fg(theme::TEXT_PRIMARY)
         };
         spans.push(Span::styled(c.to_string(), style));
     }
 
     // Show cursor at end if at end of text
     if cursor_pos >= query.len() {
-        spans.push(Span::styled(" ", Style::default().bg(Color::Yellow)));
+        spans.push(Span::styled(" ", Style::default().bg(theme::ACCENT)));
     }
 
     let paragraph = Paragraph::new(Line::from(spans));
@@ -175,9 +182,14 @@ fn render_search_results(
     area: Rect,
 ) {
     let block = Block::default()
-        .title(format!(" Results ({}) ", results.len()))
+        .title(Span::styled(
+            format!(" Results ({}) ", results.len()),
+            Style::default().fg(theme::TEXT_SECONDARY),
+        ))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_set(border::ROUNDED)
+        .border_style(Style::default().fg(theme::BORDER))
+        .style(Style::default().bg(theme::BG_ELEVATED));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -189,7 +201,7 @@ fn render_search_results(
             "No matching tasks found"
         };
         let paragraph = Paragraph::new(msg)
-            .style(Style::default().fg(Color::DarkGray));
+            .style(Style::default().fg(theme::TEXT_MUTED));
         frame.render_widget(paragraph, inner);
         return;
     }
@@ -261,10 +273,10 @@ fn render_task_result(
 
     // Priority color
     let priority_style = match task.priority {
-        Priority::Urgent => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        Priority::High => Style::default().fg(Color::Yellow),
+        Priority::Urgent => Style::default().fg(theme::PRIORITY_URGENT).add_modifier(Modifier::BOLD),
+        Priority::High => Style::default().fg(theme::PRIORITY_HIGH),
         Priority::Medium => Style::default(),
-        Priority::Low => Style::default().fg(Color::DarkGray),
+        Priority::Low => Style::default().fg(theme::PRIORITY_LOW),
     };
 
     // Due date
@@ -279,22 +291,20 @@ fn render_task_result(
 
     // Base style based on task state
     let base_style = if task.status == TaskStatus::Completed || task.status == TaskStatus::Archived {
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::DIM)
+        Style::default().fg(theme::TEXT_COMPLETED)
     } else if task.is_overdue() {
-        Style::default().fg(Color::Red)
+        Style::default().fg(theme::DUE_OVERDUE)
     } else if task.is_due_today() {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(theme::DUE_TODAY)
     } else if task.is_due_this_week() {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(theme::DUE_WEEK)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(theme::TEXT_PRIMARY)
     };
 
     // Selection indicator and style
     let (selector, selector_style) = if is_selected {
-        ("▶ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        ("▶ ", Style::default().fg(theme::ACCENT).add_modifier(Modifier::BOLD))
     } else {
         ("  ", Style::default())
     };
@@ -343,7 +353,7 @@ fn render_task_result(
     if !due_str.is_empty() {
         spans.push(Span::styled(
             format!("  {}", due_str),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme::TEXT_MUTED),
         ));
     }
 
@@ -353,7 +363,7 @@ fn render_task_result(
 /// Renders a tag match with highlighting.
 fn render_tag_match(tag: &str, query: &str, _is_selected: bool) -> Line<'static> {
     let indent = "     "; // Align with task title after selector + checkbox + priority
-    let tag_style = Style::default().fg(Color::Magenta);
+    let tag_style = Style::default().fg(theme::TAG);
 
     // Find and highlight the match in the tag
     let query_clean = query.to_lowercase().trim_start_matches('#').to_string();
@@ -368,7 +378,7 @@ fn render_tag_match(tag: &str, query: &str, _is_selected: bool) -> Line<'static>
 
         Line::from(vec![
             Span::styled(indent.to_string(), Style::default()),
-            Span::styled("Tag: #".to_string(), Style::default().fg(Color::DarkGray)),
+            Span::styled("Tag: #".to_string(), Style::default().fg(theme::TEXT_MUTED)),
             Span::styled(before.to_string(), tag_style),
             Span::styled(matched.to_string(), match_style),
             Span::styled(after.to_string(), tag_style),
@@ -376,7 +386,7 @@ fn render_tag_match(tag: &str, query: &str, _is_selected: bool) -> Line<'static>
     } else {
         Line::from(vec![
             Span::styled(indent.to_string(), Style::default()),
-            Span::styled("Tag: ".to_string(), Style::default().fg(Color::DarkGray)),
+            Span::styled("Tag: ".to_string(), Style::default().fg(theme::TEXT_MUTED)),
             Span::styled(format!("#{}", tag), tag_style),
         ])
     }
@@ -385,7 +395,7 @@ fn render_tag_match(tag: &str, query: &str, _is_selected: bool) -> Line<'static>
 /// Renders a description snippet with the match highlighted.
 fn render_description_snippet(snippet: &str, query: &str, _is_selected: bool) -> Line<'static> {
     let indent = "     "; // Align with task title after selector + checkbox + priority
-    let base_style = Style::default().fg(Color::DarkGray);
+    let base_style = Style::default().fg(theme::TEXT_MUTED);
 
     // Find and highlight the match in the snippet
     let query_lower = query.to_lowercase();

@@ -7,19 +7,22 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
+use super::{
+    button_focused_style, button_style, centered_rect, dialog_block, field_block, DialogAction,
+};
 use crate::models::{Priority, Task};
 use crate::storage::Tag;
 use crate::ui::date_picker::{DatePicker, DatePickerAction};
 use crate::ui::description_textarea::{DescriptionTextArea, TextAreaAction};
-use crate::ui::dialogs::{centered_rect, DialogAction};
 use crate::ui::input::TextInput;
 use crate::ui::tag_input::TagInput;
+use crate::ui::theme;
 
 /// The currently focused field in the dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -392,18 +395,15 @@ impl AddTaskDialog {
         let dialog_height = 28.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background dim effect
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Render dialog box
-        let block = Block::default()
-            .title(format!(" {} ", self.dialog_title))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
-
+        // Render dialog box with themed styling
+        let block = dialog_block(&self.dialog_title, false);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -449,7 +449,7 @@ impl AddTaskDialog {
         // Render status message if any
         if let Some(ref msg) = self.status_message {
             let status = Paragraph::new(msg.as_str())
-                .style(Style::default().fg(Color::Green));
+                .style(Style::default().fg(theme::SUCCESS));
             frame.render_widget(status, chunks[5]);
         }
 
@@ -494,17 +494,7 @@ impl AddTaskDialog {
 
     /// Renders the priority selector.
     fn render_priority_selector(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let border_style = if focused {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .title(" Priority ")
-            .borders(Borders::ALL)
-            .border_style(border_style);
-
+        let block = field_block("Priority", focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
@@ -527,7 +517,7 @@ impl AddTaskDialog {
                     .fg(priority_color(*p))
                     .add_modifier(Modifier::BOLD | Modifier::REVERSED)
             } else {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(theme::TEXT_MUTED)
             };
 
             spans.push(Span::styled(format!(" {} ", name), style));
@@ -546,12 +536,9 @@ impl AddTaskDialog {
         };
 
         let style = if focused {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Green)
-                .add_modifier(Modifier::BOLD)
+            button_focused_style()
         } else {
-            Style::default().fg(Color::Green)
+            button_style().fg(theme::SUCCESS)
         };
 
         // Center the button
@@ -570,12 +557,12 @@ impl Default for AddTaskDialog {
 }
 
 /// Returns the display color for a priority level.
-fn priority_color(priority: Priority) -> Color {
+fn priority_color(priority: Priority) -> ratatui::style::Color {
     match priority {
-        Priority::Low => Color::Gray,
-        Priority::Medium => Color::Blue,
-        Priority::High => Color::Yellow,
-        Priority::Urgent => Color::Red,
+        Priority::Low => theme::PRIORITY_LOW,
+        Priority::Medium => theme::INFO,
+        Priority::High => theme::PRIORITY_HIGH,
+        Priority::Urgent => theme::PRIORITY_URGENT,
     }
 }
 

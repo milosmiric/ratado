@@ -6,13 +6,17 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Layout},
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
     Frame,
 };
 
-use crate::ui::dialogs::{centered_rect, DialogAction};
+use super::{
+    button_danger_style, button_focused_style, button_style, centered_rect, dialog_block,
+    hint_style, DialogAction,
+};
+use crate::ui::theme;
 
 /// A yes/no confirmation dialog.
 #[derive(Debug)]
@@ -112,24 +116,15 @@ impl ConfirmDialog {
         let dialog_height = 10.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Dialog box
-        let border_color = if self.destructive {
-            Color::Red
-        } else {
-            Color::Cyan
-        };
-
-        let block = Block::default()
-            .title(format!(" {} ", self.title))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(border_color))
-            .style(Style::default().bg(Color::Black));
-
+        // Dialog box with themed styling
+        let block = dialog_block(&self.title, self.destructive);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -144,35 +139,26 @@ impl ConfirmDialog {
 
         // Message
         let message = Paragraph::new(self.message.as_str())
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(theme::TEXT_PRIMARY))
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
         frame.render_widget(message, chunks[0]);
 
-        // Buttons
+        // Buttons with themed styling
         let yes_style = if self.selected_yes {
             if self.destructive {
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Red)
-                    .add_modifier(Modifier::BOLD)
+                button_danger_style()
             } else {
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
+                button_focused_style()
             }
         } else {
-            Style::default().fg(Color::Gray)
+            button_style()
         };
 
         let no_style = if !self.selected_yes {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::White)
-                .add_modifier(Modifier::BOLD)
+            button_focused_style()
         } else {
-            Style::default().fg(Color::Gray)
+            button_style()
         };
 
         let buttons = Line::from(vec![
@@ -186,7 +172,7 @@ impl ConfirmDialog {
 
         // Hint
         let hint = Paragraph::new("y/n or ←/→ to select, Enter to confirm")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(hint_style())
             .alignment(Alignment::Center);
         frame.render_widget(hint, chunks[3]);
     }

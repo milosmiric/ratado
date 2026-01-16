@@ -7,13 +7,17 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
-use crate::ui::dialogs::{centered_rect, DialogAction};
+use super::{
+    button_danger_style, button_focused_style, centered_rect, dialog_block, hint_style,
+    DialogAction,
+};
+use crate::ui::theme;
 
 /// Available settings options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -192,18 +196,15 @@ impl SettingsDialog {
         let dialog_height = 9.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Dialog box
-        let block = Block::default()
-            .title(" Settings ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
-
+        // Dialog box with themed styling
+        let block = dialog_block("Settings", false);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -219,7 +220,7 @@ impl SettingsDialog {
 
         // Section title
         let title = Paragraph::new("Data Management")
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .style(Style::default().fg(theme::WARNING).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
         frame.render_widget(title, chunks[0]);
 
@@ -229,9 +230,9 @@ impl SettingsDialog {
             let prefix = if is_selected { " ▸ " } else { "   " };
 
             let style = if is_selected {
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                Style::default().fg(theme::ERROR).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(theme::TEXT_PRIMARY)
             };
 
             let line = Paragraph::new(Line::from(vec![
@@ -243,7 +244,7 @@ impl SettingsDialog {
 
         // Hint
         let hint = Paragraph::new("↑/↓ navigate • Enter select • Esc close")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(hint_style())
             .alignment(Alignment::Center);
         frame.render_widget(hint, chunks[4]);
     }
@@ -257,18 +258,15 @@ impl SettingsDialog {
         let dialog_height = 11.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Dialog box with red border for destructive action
-        let block = Block::default()
-            .title(" ⚠ Confirm ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red))
-            .style(Style::default().bg(Color::Black));
-
+        // Dialog box with destructive styling
+        let block = dialog_block("⚠ Confirm", true);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -290,7 +288,7 @@ impl SettingsDialog {
             None => "",
         };
         let question_paragraph = Paragraph::new(question)
-            .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            .style(Style::default().fg(theme::TEXT_PRIMARY).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center);
         frame.render_widget(question_paragraph, chunks[0]);
 
@@ -298,16 +296,16 @@ impl SettingsDialog {
         let warning = match self.confirming_option {
             Some(SettingsOption::DeleteCompletedTasks) => {
                 vec![
-                    Line::from(Span::styled("All completed tasks will be permanently removed.", Style::default().fg(Color::Yellow))),
+                    Line::from(Span::styled("All completed tasks will be permanently removed.", Style::default().fg(theme::WARNING))),
                     Line::from(""),
-                    Line::from(Span::styled("This action cannot be undone.", Style::default().fg(Color::Red))),
+                    Line::from(Span::styled("This action cannot be undone.", Style::default().fg(theme::ERROR))),
                 ]
             }
             Some(SettingsOption::ResetDatabase) => {
                 vec![
-                    Line::from(Span::styled("All tasks, projects, and tags will be deleted.", Style::default().fg(Color::Yellow))),
-                    Line::from(Span::styled("Only the Inbox project will remain.", Style::default().fg(Color::Yellow))),
-                    Line::from(Span::styled("This action cannot be undone.", Style::default().fg(Color::Red))),
+                    Line::from(Span::styled("All tasks, projects, and tags will be deleted.", Style::default().fg(theme::WARNING))),
+                    Line::from(Span::styled("Only the Inbox project will remain.", Style::default().fg(theme::WARNING))),
+                    Line::from(Span::styled("This action cannot be undone.", Style::default().fg(theme::ERROR))),
                 ]
             }
             None => vec![],
@@ -317,21 +315,15 @@ impl SettingsDialog {
 
         // Buttons
         let yes_style = if self.confirm_selected_yes {
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Red)
-                .add_modifier(Modifier::BOLD)
+            button_danger_style()
         } else {
-            Style::default().fg(Color::DarkGray)
+            hint_style()
         };
 
         let no_style = if !self.confirm_selected_yes {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::White)
-                .add_modifier(Modifier::BOLD)
+            button_focused_style()
         } else {
-            Style::default().fg(Color::DarkGray)
+            hint_style()
         };
 
         let buttons = Line::from(vec![
@@ -345,7 +337,7 @@ impl SettingsDialog {
 
         // Hint
         let hint = Paragraph::new("y/n or ←/→ select • Enter confirm")
-            .style(Style::default().fg(Color::DarkGray))
+            .style(hint_style())
             .alignment(Alignment::Center);
         frame.render_widget(hint, chunks[5]);
     }

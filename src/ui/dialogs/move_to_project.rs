@@ -4,14 +4,15 @@
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
     Frame,
 };
 
+use super::{centered_rect, dialog_block, hint_style, selected_style, DialogAction};
 use crate::models::Project;
-use crate::ui::dialogs::{centered_rect, DialogAction};
+use crate::ui::theme;
 
 /// Dialog for selecting a project to move a task to.
 #[derive(Debug, Clone)]
@@ -108,18 +109,15 @@ impl MoveToProjectDialog {
         let dialog_width = 40.min(area.width.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
-        // Render background dim effect
+        // Render dimmed background
         frame.render_widget(Clear, area);
-        let dim_block = Block::default().style(Style::default().bg(Color::Black));
-        frame.render_widget(dim_block, area);
+        frame.render_widget(
+            Paragraph::new("").style(Style::default().bg(theme::BG_DARK)),
+            area,
+        );
 
-        // Render dialog box
-        let block = Block::default()
-            .title(" Move to Project ")
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .style(Style::default().bg(Color::Black));
-
+        // Render dialog box with themed styling
+        let block = dialog_block("Move to Project", false);
         let inner = block.inner(dialog_area);
         frame.render_widget(block, dialog_area);
 
@@ -129,18 +127,15 @@ impl MoveToProjectDialog {
         if self.projects.is_empty() {
             lines.push(Line::from(Span::styled(
                 "No projects available",
-                Style::default().fg(Color::DarkGray),
+                hint_style(),
             )));
         } else {
             for (i, project) in self.projects.iter().enumerate() {
                 let is_selected = i == self.selected_index;
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    selected_style()
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(theme::TEXT_PRIMARY)
                 };
 
                 let prefix = if is_selected { "▶ " } else { "  " };
@@ -161,7 +156,7 @@ impl MoveToProjectDialog {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "↑↓:select  Enter:move  Esc:cancel",
-            Style::default().fg(Color::DarkGray),
+            hint_style(),
         )));
 
         let paragraph = Paragraph::new(lines);
