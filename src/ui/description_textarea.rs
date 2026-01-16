@@ -22,6 +22,8 @@ use ratatui::{
     widgets::{Block, Borders, Widget},
 };
 
+use super::theme;
+
 /// Result of handling a key event in the textarea.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TextAreaAction {
@@ -487,12 +489,22 @@ impl DescriptionTextArea {
     /// Renders the textarea to the given area.
     pub fn render(&self, area: Rect, buf: &mut Buffer, focused: bool, label: Option<&str>) {
         let border_style = if focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(theme::PRIMARY_LIGHT)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(theme::BORDER)
         };
 
-        let title = label.map(|l| format!(" {} ", l)).unwrap_or_default();
+        let label_style = if focused {
+            Style::default()
+                .fg(theme::PRIMARY_LIGHT)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(theme::TEXT_MUTED)
+        };
+
+        let title = label
+            .map(|l| ratatui::text::Span::styled(format!(" {} ", l), label_style))
+            .unwrap_or_default();
 
         let block = Block::default()
             .title(title)
@@ -518,13 +530,13 @@ impl DescriptionTextArea {
                 }
                 buf[(x, area.y)]
                     .set_char(ch)
-                    .set_style(Style::default().fg(Color::DarkGray));
+                    .set_style(Style::default().fg(theme::TEXT_MUTED));
             }
             // Show cursor at start if focused
             if focused {
                 buf[(area.x, area.y)]
                     .set_char(' ')
-                    .set_style(Style::default().add_modifier(Modifier::REVERSED));
+                    .set_style(Style::default().bg(theme::ACCENT).fg(Color::Black));
             }
             return;
         }
@@ -560,13 +572,13 @@ impl DescriptionTextArea {
                 }
 
                 // Determine style for this character
-                let mut style = Style::default().fg(Color::White);
+                let mut style = Style::default().fg(theme::TEXT_PRIMARY);
 
                 // Check if this position is within a link
                 for link in &line_links {
                     if col >= link.start && col < link.end {
                         style = Style::default()
-                            .fg(Color::Cyan)
+                            .fg(theme::INFO)
                             .add_modifier(Modifier::UNDERLINED);
                         break;
                     }
@@ -574,7 +586,7 @@ impl DescriptionTextArea {
 
                 // Apply cursor style if focused and at cursor position
                 if focused && line_idx == self.cursor_row && col == self.cursor_col {
-                    style = style.add_modifier(Modifier::REVERSED);
+                    style = Style::default().bg(theme::ACCENT).fg(Color::Black);
                 }
 
                 buf[(x, y)].set_char(ch).set_style(style);
@@ -585,7 +597,7 @@ impl DescriptionTextArea {
             if focused && line_idx == self.cursor_row && self.cursor_col >= line.len() && x < max_x {
                 buf[(x, y)]
                     .set_char(' ')
-                    .set_style(Style::default().add_modifier(Modifier::REVERSED));
+                    .set_style(Style::default().bg(theme::ACCENT).fg(Color::Black));
             }
         }
     }

@@ -73,7 +73,7 @@ pub fn render_help(frame: &mut Frame, _app: &App, area: Rect) {
         Line::from(""),
         keybinding_line("/", "Search tasks"),
         keybinding_line("c", "Weekly calendar"),
-        keybinding_line("Enter", "Task detail view"),
+        keybinding_line("v", "Task detail view"),
         Line::from(""),
         section_header("GENERAL"),
         Line::from(""),

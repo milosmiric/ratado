@@ -234,6 +234,7 @@ fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
         KeyCode::Char('?') => Some(Command::ShowHelp),
         KeyCode::Char('/') => Some(Command::ShowSearch),
         KeyCode::Char('c') => Some(Command::ShowCalendar),
+        KeyCode::Char('v') => Some(Command::ShowTaskDetail),
 
         // === Quick Filters ===
         KeyCode::Char('T') => Some(Command::FilterToday),
