@@ -30,6 +30,9 @@ src/
 ├── app.rs               # Application state (central App struct)
 ├── lib.rs               # Library exports
 ├── ui/                  # Ratatui widgets and views
+│   ├── theme.rs         # Color palette, icons, style presets
+│   ├── dialogs/         # Modal dialogs (add_task, confirm, etc.)
+│   └── ...              # Other UI components
 ├── models/              # Task, Project, Filter structs
 ├── handlers/            # Keyboard input and command handling
 ├── storage/             # Turso database operations
@@ -44,6 +47,7 @@ src/
 - **Local-first**: All data stored locally (macOS: `~/Library/Application Support/ratado/ratado.db`, Linux: `~/.config/ratado/ratado.db`)
 - **Central state**: Single `App` struct manages all application state
 - **Event loop**: Input events + timer events → update state → render UI
+- **Theme system**: Centralized in `ui/theme.rs` - provides consistent colors, icons, and style presets. Uses a dark blue-violet palette with semantic colors for status/priority. All UI components should use theme constants, not hardcoded colors.
 
 ## Code Documentation Guidelines
 

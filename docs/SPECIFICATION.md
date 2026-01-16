@@ -104,7 +104,7 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 | View | Description | Access |
 |------|-------------|--------|
 | Main | Split view with sidebar and task list | Default |
-| Task Detail | Full-screen single task display | `Enter` on task |
+| Task Detail | Full-screen single task display | `v` on task |
 | Calendar | Weekly calendar with tasks by due date | `c` |
 | Search | Full-text search with results | `/` |
 | Help | Keybindings reference | `?` |
@@ -147,6 +147,65 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 - Yellow - Due today
 - Cyan - Due this week
 - Gray - Future/Completed
+
+### 3.5 Theme & Styling
+
+Ratado uses a cohesive dark theme with a blue-violet gradient as its signature look. The theme is terminal-native and provides consistent styling across all views.
+
+**Design Philosophy:**
+- Distinctive visual identity with cool gradient tones
+- Semantic colors that convey meaning (status, priority, urgency)
+- Clear visual hierarchy guiding user attention
+- Consistent dark background independent of terminal settings
+
+**Color Palette:**
+
+| Category | Color | Usage |
+|----------|-------|-------|
+| Primary | Indigo (#6366F1) | Brand color, focused elements |
+| Primary Light | Lighter Indigo (#818CF8) | Hover/focus states, highlights |
+| Secondary | Teal (#14B8A6) | Complementary accent |
+| Accent | Amber (#FBBF24) | Important highlights, cursor |
+| Success | Green (#22C55E) | Completed states |
+| Warning | Orange (#FB923C) | Warnings, high priority |
+| Error | Red (#EF4444) | Errors, urgent priority, overdue |
+| Info | Sky Blue (#38BDF8) | Information, links |
+
+**Surface Colors:**
+
+| Surface | Description |
+|---------|-------------|
+| BG Dark | Main application background (#0F0F19) |
+| BG Elevated | Panel and dialog backgrounds (#19192B) |
+| BG Selection | Selected item highlight (#2D2D46) |
+| Border | Default borders (#646478) |
+| Border Focused | Focused element borders (Primary Light) |
+
+**Text Colors:**
+
+| Text Type | Usage |
+|-----------|-------|
+| Primary | Main content, high contrast |
+| Secondary | Labels, less important text |
+| Muted | Metadata, hints, placeholders |
+| Completed | Completed task text (readable but subdued) |
+| Disabled | Inactive elements |
+
+**Icons & Symbols:**
+
+| Icon | Meaning |
+|------|---------|
+| `○` | Pending task |
+| `◐` | In progress task |
+| `●` | Completed task |
+| `◌` | Archived task |
+| `▲` | Urgent priority |
+| `△` | High priority |
+| `▽` | Low priority |
+| `@` | Project prefix |
+| `#` | Tag prefix |
+| `✓` | Completion indicator |
+| `·` | Separator dot |
 
 ---
 
@@ -195,6 +254,7 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 | `p` | Task List | Cycle priority |
 | `t` | Task List | Edit tags |
 | `m` | Task List | Move to project |
+| `v` | Task List | Open task detail view |
 
 ### 4.5 Normal Mode - Views & Filters
 
@@ -241,6 +301,10 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 
 ### 4.8 Calendar View
 
+The calendar view has two focus states: Day Grid and Task List. Press `Tab` to toggle between them.
+
+**Day Grid Focus (default):**
+
 | Key | Action |
 |-----|--------|
 | `Esc` | Return to main |
@@ -249,8 +313,32 @@ a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
 | `k` / `↑` | Previous week |
 | `j` / `↓` | Next week |
 | `t` | Jump to today |
-| `Enter` | Select day |
+| `f` | Toggle completed tasks filter |
+| `Tab` | Switch to task list |
+| `Enter` | Select day and return to main |
 | `q` | Quit |
+
+**Task List Focus:**
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Return to day grid |
+| `j` / `↓` | Next task |
+| `k` / `↑` | Previous task |
+| `Space` | Toggle task completion |
+| `p` | Cycle priority |
+| `e` | Edit task |
+| `d` | Delete task |
+| `f` | Toggle completed tasks filter |
+| `Tab` | Return to day grid |
+| `Enter` | Go to task in its project |
+| `q` | Quit |
+
+**Task List Features:**
+- Shows tasks with same styling as main task list (status icon, priority, title, project, tags, completion date)
+- Tasks sorted by default sort order (due date, then priority)
+- Filter toggle: "Active" (hide completed) or "All" (show completed)
+- Press Enter to navigate to the task in its project view (or All Tasks if no project)
 
 ### 4.9 Task Detail View
 
