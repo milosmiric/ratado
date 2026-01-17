@@ -8,6 +8,10 @@ license = "MIT"
 repository = "https://github.com/milosmiric/ratado"
 keywords = ["todo", "task", "terminal", "tui", "productivity"]
 categories = ["command-line-utilities"]
+readme = "README.md"
+homepage = "https://github.com/milosmiric/ratado"
+rust-version = "1.85"
+exclude = [".github/", "docs/", ".gitignore"]
 
 [dependencies]
 chrono = { version = "0.4.42", features = ["serde"] }
@@ -33,3 +37,21 @@ uuid = { version = "1.19.0", features = ["v4", "serde", "v7"] }
 [dev-dependencies]
 insta = { version = "1.46.0", features = ["yaml"] }
 pretty_assertions = "1.4.1"
+
+# Config for 'cargo dist'
+[workspace.metadata.dist]
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["shell", "powershell"]
+# Target platforms to build for
+targets = [
+    "aarch64-apple-darwin",      # macOS Apple Silicon (native, no Rosetta)
+    "x86_64-apple-darwin",       # macOS Intel
+    "x86_64-unknown-linux-gnu",  # Linux
+    "x86_64-pc-windows-msvc",    # Windows
+]
+# Publish jobs to run in CI
+pr-run-mode = "plan"
+# Whether to install an updater program
+install-updater = false
