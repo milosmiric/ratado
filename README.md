@@ -18,7 +18,26 @@ A fast, keyboard-driven terminal task manager built with Rust and [Ratatui](http
 
 ## Installation
 
+### Pre-built Binaries (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/milosmiric/ratado/releases).
+
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `ratado-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `ratado-x86_64-apple-darwin.tar.gz` |
+| Linux | `ratado-x86_64-unknown-linux-gnu.tar.gz` |
+| Windows | `ratado-x86_64-pc-windows-msvc.zip` |
+
+```bash
+# macOS/Linux: Extract and move to PATH
+tar xzf ratado-*.tar.gz
+sudo mv ratado /usr/local/bin/
+```
+
 ### From Source
+
+Requires Rust 1.85 or later.
 
 ```bash
 # Clone the repository
@@ -34,7 +53,6 @@ cargo build --release
 
 ### Requirements
 
-- Rust 1.85 or later
 - A terminal with Unicode support
 
 ## Usage
