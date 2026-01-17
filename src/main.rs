@@ -5,6 +5,7 @@
 use std::io;
 use std::time::Duration;
 
+use clap::Parser;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -18,11 +19,20 @@ use ratado::handlers::{handle_event, EventHandler};
 use ratado::storage::{run_migrations, Database};
 use ratado::ui;
 
+/// A fast, keyboard-driven terminal task manager
+#[derive(Parser)]
+#[command(name = "ratado")]
+#[command(version, about, long_about = None)]
+struct Cli {}
+
 /// Tick rate for the event loop (250ms for checking reminders)
 const TICK_RATE: Duration = Duration::from_millis(250);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse CLI arguments (handles --version and --help automatically)
+    Cli::parse();
+
     // Initialize logging
     tui_logger::init_logger(log::LevelFilter::Debug)?;
     tui_logger::set_default_level(log::LevelFilter::Debug);
