@@ -35,6 +35,13 @@ tar xzf ratado-*.tar.gz
 sudo mv ratado /usr/local/bin/
 ```
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap milosmiric/tap
+brew install ratado
+```
+
 ### From Source
 
 Requires Rust 1.85 or later.
