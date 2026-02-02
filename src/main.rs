@@ -3,6 +3,7 @@
 //! A terminal-based task manager built with Rust and Ratatui.
 
 use std::io;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser;
@@ -23,7 +24,11 @@ use ratado::ui;
 #[derive(Parser)]
 #[command(name = "ratado")]
 #[command(version, about, long_about = None)]
-struct Cli {}
+struct Cli {
+    /// Path to the database file (defaults to platform-specific location)
+    #[arg(short = 'd', long)]
+    db_path: Option<PathBuf>,
+}
 
 /// Tick rate for the event loop (250ms for checking reminders)
 const TICK_RATE: Duration = Duration::from_millis(250);
@@ -31,7 +36,7 @@ const TICK_RATE: Duration = Duration::from_millis(250);
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI arguments (handles --version and --help automatically)
-    Cli::parse();
+    let cli = Cli::parse();
 
     // Initialize logging
     tui_logger::init_logger(log::LevelFilter::Debug)?;
@@ -55,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // Initialize database
-    let db_path = Database::default_path()?;
+    let db_path = match cli.db_path {
+        Some(path) => path,
+        None => Database::default_path()?,
+    };
     info!("Opening database at {:?}", db_path);
     let db = Database::open(&db_path).await?;
     run_migrations(&db).await?;
