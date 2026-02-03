@@ -16,8 +16,10 @@ Ratado is a terminal-based task manager built with Rust and Ratatui. The name co
 cargo build           # Build the project
 cargo build --release # Build with optimizations
 cargo run             # Run the TUI application
-cargo test            # Run all tests
+cargo run -- -d /path/to/db  # Run with custom database path
+cargo test            # Run all tests (unit + E2E)
 cargo test <name>     # Run a specific test
+cargo test --test e2e_tests  # Run only E2E tests
 cargo clippy          # Run linter
 cargo fmt             # Format code
 ```
@@ -26,17 +28,20 @@ cargo fmt             # Format code
 
 ```
 src/
-├── main.rs              # Entry point
+├── main.rs              # Entry point (CLI args via clap)
 ├── app.rs               # Application state (central App struct)
 ├── lib.rs               # Library exports
 ├── ui/                  # Ratatui widgets and views
 │   ├── theme.rs         # Color palette, icons, style presets
-│   ├── dialogs/         # Modal dialogs (add_task, confirm, etc.)
+│   ├── dialogs/         # Modal dialogs (add_task, confirm, quick_capture, etc.)
 │   └── ...              # Other UI components
 ├── models/              # Task, Project, Filter structs
 ├── handlers/            # Keyboard input and command handling
-├── storage/             # Turso database operations
+├── storage/             # Turso database operations (with version tracking)
 └── utils/               # Date/time helpers
+tests/
+├── e2e_tests.rs         # End-to-end integration tests (expectrl)
+└── e2e/mod.rs           # E2E test helpers
 ```
 
 ## Key Design Decisions

@@ -85,7 +85,7 @@ pub fn render_help(frame: &mut Frame, _app: &App, area: Rect) {
         keybinding_line("q", "Quit"),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Ratado v0.1.0", Style::default().fg(theme::TEXT_MUTED)),
+            Span::styled(format!("  Ratado v{}", env!("CARGO_PKG_VERSION")), Style::default().fg(theme::TEXT_MUTED)),
         ]),
         Line::from(vec![
             Span::styled("  Created by Miloš Mirić", Style::default().fg(theme::TEXT_MUTED)),

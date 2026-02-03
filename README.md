@@ -11,6 +11,7 @@ A fast, keyboard-driven terminal task manager built with Rust and [Ratatui](http
 - **Keyboard-Driven** - Full functionality accessible without a mouse
 - **Vim-Style Navigation** - Familiar keybindings for terminal users
 - **Offline-First** - All data stored locally in SQLite
+- **Quick Capture** - Rapid single-line task entry with `@project #tag !priority due:date` syntax
 - **Projects & Tags** - Organize tasks with projects and flexible tagging
 - **Smart Filtering** - Filter by status, priority, due date, project, or tag
 - **Weekly Calendar** - Visual overview of tasks by due date
@@ -68,6 +69,9 @@ Launch Ratado:
 
 ```bash
 ratado
+
+# Use a custom database path
+ratado --db-path ~/my-tasks.db
 ```
 
 Data is stored at `~/Library/Application Support/ratado/ratado.db` (macOS) or `~/.config/ratado/ratado.db` (Linux)
@@ -92,7 +96,8 @@ Data is stored at `~/Library/Application Support/ratado/ratado.db` (macOS) or `~
 
 | Key | Action |
 |-----|--------|
-| `a` | Add new task |
+| `a` | Quick capture task |
+| `A` | Add task (full form) |
 | `e` / `Enter` | Edit selected task |
 | `d` | Delete task |
 | `Space` | Toggle completion |
@@ -136,7 +141,7 @@ Data is stored at `~/Library/Application Support/ratado/ratado.db` (macOS) or `~
 ### Main View
 
 ```
-Ratado v0.1.0   [Overdue: 2] [Due Today: 3]  12 tasks total
+Ratado v0.2.0   [Overdue: 2] [Due Today: 3]  12 tasks total
 ──────────────────────────────────────────────────────────────────────
 PROJECTS          │ TASKS  [Pending]  [Due Date ↑]
                   │
@@ -154,8 +159,25 @@ PROJECTS          │ TASKS  [Pending]  [Due Date ↑]
                   │   [ ]  ↓ Organize desk                  @Inbox  #home
                   │
 ──────────────────────────────────────────────────────────────────────
-a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
+a Capture  A Add  e Edit  d Del  Space Done  / Search  c Calendar  f Filter  ? Help
 ```
+
+## Quick Capture
+
+Press `a` to open the Quick Capture spotlight. Type a single line with inline tokens to rapidly create tasks:
+
+```
+Buy groceries @Personal #shopping !3 due:friday
+```
+
+| Token | Meaning | Example |
+|-------|---------|---------|
+| `@Name` | Assign project (fuzzy matched) | `@Work` |
+| `#tag` | Add tag | `#urgent` |
+| `!1`–`!4` | Set priority (1=urgent, 4=low) | `!1` |
+| `due:val` | Set due date | `due:tomorrow` |
+
+Autocomplete suggestions appear for projects, tags, and priorities. Press `Tab` to accept a suggestion, or expand to the full task form when no suggestions are showing.
 
 ## Task Attributes
 
