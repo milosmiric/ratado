@@ -379,7 +379,7 @@ impl Command {
                         app.set_status("Task completed!");
                     }
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -394,8 +394,8 @@ impl Command {
                         Priority::Urgent => Priority::Low,
                     };
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
                     app.set_status(format!("Priority: {:?}", task.priority));
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -545,7 +545,7 @@ impl Command {
                         app.set_status("Task completed!");
                     }
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -563,8 +563,8 @@ impl Command {
                         Priority::Urgent => Priority::Low,
                     };
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
                     app.set_status(format!("Priority: {:?}", task.priority));
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }

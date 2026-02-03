@@ -227,6 +227,38 @@ impl Database {
         Ok(tags)
     }
 
+    /// Gets all task-tag associations in a single query.
+    ///
+    /// This is an optimized alternative to calling [`get_tags_for_task`] per task,
+    /// reducing N+1 queries to a single JOIN query.
+    ///
+    /// # Returns
+    ///
+    /// A `HashMap` mapping task IDs to their tag name vectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the query fails.
+    pub async fn get_all_task_tags(&self) -> Result<std::collections::HashMap<String, Vec<String>>> {
+        let mut rows = self
+            .query(
+                "SELECT tt.task_id, t.name FROM task_tags tt
+                 JOIN tags t ON t.id = tt.tag_id
+                 ORDER BY t.name ASC",
+                (),
+            )
+            .await?;
+
+        let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+        while let Some(row) = rows.next().await? {
+            let task_id = value_to_string(row.get_value(0)?)?;
+            let tag_name = value_to_string(row.get_value(1)?)?;
+            map.entry(task_id).or_default().push(tag_name);
+        }
+
+        Ok(map)
+    }
+
     /// Gets the count of tasks with a specific tag.
     ///
     /// # Arguments
@@ -554,6 +586,46 @@ mod tests {
         let tags = db.get_all_tags().await.unwrap();
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].name, "used");
+    }
+
+    #[tokio::test]
+    async fn test_get_all_task_tags() {
+        let db = setup_db().await;
+
+        let task1 = Task::new("Task 1");
+        db.insert_task(&task1).await.unwrap();
+        db.add_tag_to_task(&task1.id, "work").await.unwrap();
+        db.add_tag_to_task(&task1.id, "urgent").await.unwrap();
+
+        let task2 = Task::new("Task 2");
+        db.insert_task(&task2).await.unwrap();
+        db.add_tag_to_task(&task2.id, "personal").await.unwrap();
+
+        let task3 = Task::new("Task 3 no tags");
+        db.insert_task(&task3).await.unwrap();
+
+        let map = db.get_all_task_tags().await.unwrap();
+
+        // task1 should have 2 tags
+        let tags1 = map.get(&task1.id).unwrap();
+        assert_eq!(tags1.len(), 2);
+        assert!(tags1.contains(&"urgent".to_string()));
+        assert!(tags1.contains(&"work".to_string()));
+
+        // task2 should have 1 tag
+        let tags2 = map.get(&task2.id).unwrap();
+        assert_eq!(tags2.len(), 1);
+        assert_eq!(tags2[0], "personal");
+
+        // task3 should not be in the map
+        assert!(map.get(&task3.id).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_all_task_tags_empty() {
+        let db = setup_db().await;
+        let map = db.get_all_task_tags().await.unwrap();
+        assert!(map.is_empty());
     }
 
     #[tokio::test]

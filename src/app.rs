@@ -226,7 +226,23 @@ impl App {
         self.projects = self.db.get_all_projects().await?;
         self.tags = self.db.get_all_tags().await?;
 
-        // Reset task selection if out of bounds
+        self.adjust_task_selection();
+
+        Ok(())
+    }
+
+    /// Refreshes data from the database.
+    ///
+    /// Call this after modifying data to sync the UI with the database.
+    pub async fn refresh(&mut self) -> Result<()> {
+        self.load_data().await
+    }
+
+    /// Adjusts the selected task index to remain valid after tasks change.
+    ///
+    /// Call this after modifying `self.tasks` in-place to keep the selection
+    /// within bounds.
+    pub fn adjust_task_selection(&mut self) {
         let visible_count = self.visible_tasks().len();
         if visible_count == 0 {
             self.selected_task_index = None;
@@ -237,15 +253,49 @@ impl App {
         } else {
             self.selected_task_index = Some(0);
         }
-
-        Ok(())
     }
 
-    /// Refreshes data from the database.
+    /// Updates a task in the in-memory task list without reloading from the database.
     ///
-    /// Call this after modifying data to sync the UI with the database.
-    pub async fn refresh(&mut self) -> Result<()> {
-        self.load_data().await
+    /// Finds the task by ID and replaces it. Does nothing if the task is not found.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The updated task to replace in the list
+    pub fn update_task_in_place(&mut self, task: Task) {
+        if let Some(existing) = self.tasks.iter_mut().find(|t| t.id == task.id) {
+            *existing = task;
+        }
+        self.adjust_task_selection();
+    }
+
+    /// Removes a task from the in-memory task list without reloading from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `task_id` - The ID of the task to remove
+    pub fn remove_task_in_place(&mut self, task_id: &str) {
+        self.tasks.retain(|t| t.id != task_id);
+        self.adjust_task_selection();
+    }
+
+    /// Adds a task to the front of the in-memory task list without reloading from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to add
+    pub fn add_task_in_place(&mut self, task: Task) {
+        self.tasks.insert(0, task);
+        self.adjust_task_selection();
+    }
+
+    /// Reloads only the tags list from the database.
+    ///
+    /// Use this after operations that may change tag associations (add/edit/delete task with tags)
+    /// without needing a full `load_data()` reload.
+    pub async fn refresh_tags(&mut self) -> Result<()> {
+        self.tags = self.db.get_all_tags().await?;
+        Ok(())
     }
 
     /// Returns the list of tasks after applying current filter and sort.
@@ -645,6 +695,58 @@ mod tests {
 
         app.select_previous_project();
         assert_eq!(app.selected_project_index, 0); // Back to All
+    }
+
+    #[tokio::test]
+    async fn test_update_task_in_place() {
+        let mut app = setup_app().await;
+        let task = Task::new("Original");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+
+        let mut updated = app.tasks[0].clone();
+        updated.title = "Updated".to_string();
+        app.update_task_in_place(updated);
+
+        assert_eq!(app.tasks[0].title, "Updated");
+    }
+
+    #[tokio::test]
+    async fn test_remove_task_in_place() {
+        let mut app = setup_app().await;
+        let task = Task::new("To remove");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+        assert_eq!(app.tasks.len(), 1);
+
+        app.remove_task_in_place(&task.id);
+        assert!(app.tasks.is_empty());
+        assert_eq!(app.selected_task_index, None);
+    }
+
+    #[tokio::test]
+    async fn test_add_task_in_place() {
+        let mut app = setup_app().await;
+        assert!(app.tasks.is_empty());
+
+        let task = Task::new("New task");
+        app.add_task_in_place(task.clone());
+
+        assert_eq!(app.tasks.len(), 1);
+        assert_eq!(app.tasks[0].title, "New task");
+        assert_eq!(app.selected_task_index, Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_adjust_task_selection_clamps() {
+        let mut app = setup_app().await;
+        let task = Task::new("Only task");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+        app.selected_task_index = Some(5); // Out of bounds
+
+        app.adjust_task_selection();
+        assert_eq!(app.selected_task_index, Some(0));
     }
 
     #[tokio::test]

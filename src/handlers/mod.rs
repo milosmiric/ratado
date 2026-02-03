@@ -124,11 +124,13 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                         if add_dialog.is_editing() {
                             app.db.update_task(&task).await?;
                             app.set_status("Task updated");
+                            app.update_task_in_place(task);
                         } else {
                             app.db.insert_task(&task).await?;
                             app.set_status("Task created");
+                            app.add_task_in_place(task);
                         }
-                        app.load_data().await?;
+                        app.refresh_tags().await?;
                     }
                     // Dialog closed, don't put it back
                 }
@@ -147,11 +149,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
             match action {
                 DialogAction::Submit => {
                     // Confirmation accepted - execute the pending delete
-                    // The task ID was stored when the dialog was created
-                    // For now we handle this by checking if we have a selected task
                     if let Some(task) = app.selected_task().cloned() {
-                        app.db.delete_task(&task.id).await?;
-                        app.load_data().await?;
+                        let task_id = task.id.clone();
+                        app.db.delete_task(&task_id).await?;
+                        app.remove_task_in_place(&task_id);
+                        app.refresh_tags().await?;
                         app.set_status("Task deleted");
                     }
                     // Dialog closed
@@ -239,7 +241,7 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             app.db.insert_project(&project).await?;
                             app.set_status("Project created");
                         }
-                        app.load_data().await?;
+                        app.projects = app.db.get_all_projects().await?;
                     }
                     // Dialog closed
                 }
@@ -260,16 +262,17 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     // Move the task to the selected project
                     if let Some(project_id) = move_dialog.selected_project_id() {
                         let task_id = move_dialog.task_id.clone();
-                        if let Some(task) = app.tasks.iter_mut().find(|t| t.id == task_id) {
+                        if let Some(task) = app.tasks.iter().find(|t| t.id == task_id) {
+                            let mut task = task.clone();
                             task.project_id = Some(project_id.clone());
                             task.updated_at = chrono::Utc::now();
-                            app.db.update_task(task).await?;
+                            app.db.update_task(&task).await?;
                             let project_name = move_dialog
                                 .selected_project()
                                 .map(|p| p.name.as_str())
                                 .unwrap_or("Unknown");
                             app.set_status(format!("Task moved to {}", project_name));
-                            app.load_data().await?;
+                            app.update_task_in_place(task);
                         }
                     }
                     // Dialog closed
