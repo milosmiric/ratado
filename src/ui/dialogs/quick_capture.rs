@@ -727,7 +727,7 @@ impl QuickCaptureDialog {
         );
 
         // Calculate overlay dimensions
-        let dialog_width = 55.min((area.width * 60 / 100).max(45)).max(45);
+        let dialog_width = 60.min((area.width * 60 / 100).max(45)).max(45);
         let dialog_height: u16 = 6;
 
         // Position in upper 1/5th of screen
