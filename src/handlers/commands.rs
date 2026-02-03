@@ -34,7 +34,7 @@ use tui_logger::TuiWidgetEvent;
 
 use crate::app::{App, AppError, FocusPanel, InputMode, View};
 use crate::models::{Filter, Priority, Task};
-use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog, SettingsDialog};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog, QuickCaptureDialog, SettingsDialog};
 use crate::ui::search::search_tasks;
 
 /// All possible commands that can be executed in the application.
@@ -67,6 +67,8 @@ pub enum Command {
     // === Task Actions ===
     /// Start adding a new task
     AddTask,
+    /// Open Quick Capture spotlight dialog
+    QuickCapture,
     /// Edit the selected task
     EditTask,
     /// Delete the selected task
@@ -347,6 +349,23 @@ impl Command {
 
                 app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
                 app.set_status("Tab between fields, Ctrl+Enter to save");
+                Ok(true)
+            }
+
+            Command::QuickCapture => {
+                let mut dialog = QuickCaptureDialog::new(
+                    app.projects.clone(),
+                    app.tags.clone(),
+                    &app.tasks,
+                );
+
+                // Pre-select the current project (if not "All Tasks")
+                if let Some(project) = app.selected_project() {
+                    dialog.set_project(project.clone());
+                }
+
+                app.dialog = Some(Dialog::QuickCapture(Box::new(dialog)));
+                app.set_status("Enter/submit  Tab/expand  Esc/cancel");
                 Ok(true)
             }
 
@@ -1187,5 +1206,61 @@ mod tests {
         // Refresh should load it
         Command::Refresh.execute(&mut app).await.unwrap();
         assert_eq!(app.tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_opens_dialog() {
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+        assert!(app.dialog.is_none());
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        assert!(app.dialog.is_some());
+        assert!(matches!(app.dialog, Some(Dialog::QuickCapture(_))));
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_preselects_project() {
+        use crate::models::Project;
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+
+        // Create a project and select it in the sidebar
+        let project = Project::new("Backend");
+        app.db.insert_project(&project).await.unwrap();
+        app.projects = app.db.get_all_projects().await.unwrap();
+        // Index 0 = "All Tasks", index 1 = first project
+        app.selected_project_index = 1;
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        // Dialog should have the project pre-selected
+        if let Some(Dialog::QuickCapture(ref dialog)) = app.dialog {
+            assert!(dialog.project().is_some());
+            assert_eq!(dialog.project().unwrap().name, "Backend");
+        } else {
+            panic!("Expected QuickCapture dialog");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_no_project_when_all_tasks() {
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+        // "All Tasks" is selected (index 0)
+        app.selected_project_index = 0;
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        // Dialog should have no project pre-selected
+        if let Some(Dialog::QuickCapture(ref dialog)) = app.dialog {
+            assert!(dialog.project().is_none());
+        } else {
+            panic!("Expected QuickCapture dialog");
+        }
     }
 }

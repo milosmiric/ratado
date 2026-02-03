@@ -569,13 +569,14 @@ fn priority_color(priority: Priority) -> ratatui::style::Color {
 /// Parses a due date string into a DateTime.
 ///
 /// Supports formats:
+/// - Natural language via `human-date-parser` (e.g., "next friday", "in 3 days", "december 25th")
 /// - "YYYY-MM-DD" or "YYYY/MM/DD"
 /// - "MM/DD" or "DD/MM" (assumes current year)
 /// - "today", "tomorrow", "yesterday"
 /// - "+1d", "+3d", "+1w", "+2w" (relative days/weeks)
 /// - "mon", "tue", "wed", "thu", "fri", "sat", "sun" (next occurrence)
 /// - "next week", "next month"
-fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+pub fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone, Utc, Weekday};
 
     let input = input.to_lowercase().trim().to_string();
@@ -596,6 +597,21 @@ fn parse_due_date(input: &str) -> Option<chrono::DateTime<chrono::Utc>> {
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|| Utc.from_utc_datetime(&local_eod))
     };
+
+    // Try human-date-parser first for natural language dates
+    if let Ok(result) = human_date_parser::from_human_time(&input) {
+        match result {
+            human_date_parser::ParseResult::DateTime(dt) => {
+                return Some(dt.with_timezone(&Utc));
+            }
+            human_date_parser::ParseResult::Date(date) => {
+                return Some(to_datetime(date));
+            }
+            human_date_parser::ParseResult::Time(_) => {
+                // Time-only result, fall through to existing parsing
+            }
+        }
+    }
 
     // Keywords
     match input.as_str() {

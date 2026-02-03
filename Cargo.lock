@@ -971,6 +971,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "human-date-parser"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1116cf4debfe770c12168458321c4a8591b71c4c19f7100de07c84cf81701c63"
+dependencies = [
+ "chrono",
+ "pest",
+ "pest_derive",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1988,6 +2000,7 @@ dependencies = [
  "crossterm",
  "directories",
  "expectrl",
+ "human-date-parser",
  "insta",
  "log",
  "open",

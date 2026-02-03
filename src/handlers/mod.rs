@@ -50,7 +50,7 @@ use crossterm::event::KeyEvent;
 use log::debug;
 
 use crate::app::{App, AppError};
-use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction, SettingsOption};
+use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction, QuickCaptureAction, SettingsOption};
 
 /// Handles an application event and updates state accordingly.
 ///
@@ -324,6 +324,33 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                 DialogAction::None => {
                     // Keep the dialog open
                     app.dialog = Some(Dialog::Settings(settings_dialog));
+                }
+            }
+        }
+        Some(Dialog::QuickCapture(mut capture_dialog)) => {
+            let action = capture_dialog.handle_key(key);
+            match action {
+                QuickCaptureAction::Submit => {
+                    if let Some(task) = capture_dialog.to_task() {
+                        app.db.insert_task(&task).await?;
+                        app.set_status("Task created");
+                        app.add_task_in_place(task);
+                        app.refresh_tags().await?;
+                    }
+                    // Dialog closed
+                }
+                QuickCaptureAction::Cancel => {
+                    app.clear_status();
+                    // Dialog closed
+                }
+                QuickCaptureAction::ExpandToFull => {
+                    let add_dialog = capture_dialog.to_add_task_dialog();
+                    app.dialog = Some(Dialog::AddTask(Box::new(add_dialog)));
+                    app.set_status("Tab between fields, Ctrl+Enter to save");
+                }
+                QuickCaptureAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::QuickCapture(capture_dialog));
                 }
             }
         }

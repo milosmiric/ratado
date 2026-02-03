@@ -178,16 +178,13 @@ impl RatadoTest {
         }
     }
 
-    /// Opens the add-task dialog, types the title, tabs to Submit, and confirms.
+    /// Opens the Quick Capture dialog, types the title, and submits with Enter.
     pub fn add_task(&mut self, title: &str) -> &mut Self {
-        // Open add task dialog
+        // Open quick capture dialog
         self.press("a");
         // Type the title
         self.type_text(title);
-        // Tab through: Title -> Description -> DueDate -> Priority -> Tags -> Submit
-        for _ in 0..5 {
-            self.press_tab();
-        }
+        // Submit with Enter
         self.press_enter();
         std::thread::sleep(Duration::from_millis(100));
         self

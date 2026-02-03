@@ -87,17 +87,11 @@ fn test_empty_task_not_created() {
     let mut app = RatadoTest::spawn();
     app.wait_for_startup();
 
-    // Open add dialog and try to submit without typing a title
+    // Open quick capture dialog and try to submit without typing a title
     app.press("a");
     app.wait(Duration::from_millis(100));
-    // Tab to Submit and press Enter with empty title
-    for _ in 0..5 {
-        app.press_tab();
-    }
+    // Press Enter with empty title
     app.press_enter();
-    app.wait(Duration::from_millis(100));
-    // Close dialog if still open
-    app.press_escape();
     app.wait(Duration::from_millis(100));
 
     // DB: no task should have been created

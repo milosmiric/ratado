@@ -15,6 +15,7 @@ exclude = [".github/", "docs/", ".gitignore"]
 
 [dependencies]
 chrono = { version = "0.4.42", features = ["serde"] }
+human-date-parser = "0.2"
 clap = { version = "4.5.54", features = ["derive"] }
 crossterm = "0.29.0"
 directories = "6.0.0"

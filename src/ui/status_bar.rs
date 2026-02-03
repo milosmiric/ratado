@@ -80,6 +80,7 @@ fn render_tasklist_hints(app: &App) -> Line<'static> {
     let mut spans = Vec::new();
     spans.extend(key_hint("a", "Add"));
     spans.extend(key_hint("e", "Edit"));
+    spans.extend(key_hint("d", "Delete"));
     spans.extend(key_hint("Space", "Done"));
     spans.extend(key_hint("/", "Search"));
     spans.extend(key_hint("f", "Filter"));
