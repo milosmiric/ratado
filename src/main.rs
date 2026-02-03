@@ -17,7 +17,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 use ratado::app::App;
 use ratado::handlers::{handle_event, EventHandler};
-use ratado::storage::{run_migrations, Database};
+use ratado::storage::{check_and_update_app_version, run_migrations, Database};
 use ratado::ui;
 
 /// A fast, keyboard-driven terminal task manager
@@ -67,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Opening database at {:?}", db_path);
     let db = Database::open(&db_path).await?;
     run_migrations(&db).await?;
+    check_and_update_app_version(&db).await?;
 
     // Initialize app
     let mut app = App::new(db).await?;

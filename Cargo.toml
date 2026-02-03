@@ -1,6 +1,6 @@
 [package]
 name = "ratado"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Miloš Mirić"]
 description = "A fast, keyboard-driven terminal task manager built with Rust and Ratatui"
