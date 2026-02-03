@@ -37,6 +37,8 @@ uuid = { version = "1.19.0", features = ["v4", "serde", "v7"] }
 [dev-dependencies]
 insta = { version = "1.46.0", features = ["yaml"] }
 pretty_assertions = "1.4.1"
+expectrl = "0.8"
+tempfile = "3.15"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]
