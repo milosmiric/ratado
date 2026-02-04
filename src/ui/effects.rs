@@ -311,13 +311,15 @@ impl AnimationState {
     // Phase 6: View transition effects
     // ─────────────────────────────────────────────────────────────────────
 
-    /// Starts a view transition effect (quick fade).
+    /// Handles view transitions.
     ///
-    /// The `EffectKey::ViewTransition` uniqueness ensures rapid
-    /// view switching auto-cancels in-progress transitions.
+    /// View transitions are intentionally kept instant (no effect) because
+    /// full-screen color interpolation effects (e.g., fade_from) generate
+    /// too many terminal escape codes when switching views rapidly, which
+    /// can overwhelm the terminal emulator and cause garbled output.
     pub fn start_view_transition(&mut self) {
-        let effect = fx::fade_from(theme::BG_DARK, theme::BG_DARK, (150, Interpolation::CubicOut));
-        self.spawn(EffectKey::ViewTransition, effect);
+        // Cancel any in-progress transition
+        self.cancel(EffectKey::ViewTransition);
     }
 
 }
