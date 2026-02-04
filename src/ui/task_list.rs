@@ -12,7 +12,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FocusPanel};
-use crate::models::{Priority, Project, Task, TaskStatus};
+use crate::models::{Filter, Priority, Project, Task, TaskStatus};
 use crate::utils::format_relative_date;
 use super::theme::{self, icons};
 
@@ -49,9 +49,9 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
 
     let tasks = app.visible_tasks();
 
-    // Handle empty state with inspiring design
+    // Handle empty state with context-aware artwork
     if tasks.is_empty() {
-        render_empty_state(frame, block, area);
+        render_empty_state(frame, block, area, app);
         return;
     }
 
@@ -90,39 +90,186 @@ pub fn render_task_list(frame: &mut Frame, app: &App, area: Rect) {
     state.select(app.selected_task_index);
 
     frame.render_stateful_widget(list, area, &mut state);
+
+    // Store the list area and scroll offset for animation targeting
+    // The block has no borders, so inner area == area with 1 row for title
+    let list_content_area = Rect {
+        x: area.x,
+        y: area.y + 1, // Skip title line
+        width: area.width,
+        height: area.height.saturating_sub(1),
+    };
+
+    // ListState::offset() gives us the scroll position
+    LAST_LIST_RENDER.with(|cell| {
+        *cell.borrow_mut() = Some(ListRenderInfo {
+            content_area: list_content_area,
+            scroll_offset: state.offset(),
+            task_ids: tasks.iter().map(|t| t.id.clone()).collect(),
+        });
+    });
 }
 
-/// Renders an inspiring empty state with visual design.
-fn render_empty_state(frame: &mut Frame, block: Block, area: Rect) {
-    let empty_text = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            "┌─────────────────────────┐",
-            Style::default().fg(theme::BORDER_MUTED),
-        )),
-        Line::from(vec![
-            Span::styled("│     ", Style::default().fg(theme::BORDER_MUTED)),
-            Span::styled("✦ ✦ ✦", Style::default().fg(theme::PRIMARY)),
-            Span::styled("     │", Style::default().fg(theme::BORDER_MUTED)),
-        ]),
-        Line::from(vec![
-            Span::styled("│   ", Style::default().fg(theme::BORDER_MUTED)),
-            Span::styled("Ready to go!", Style::default().fg(theme::TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
-            Span::styled("   │", Style::default().fg(theme::BORDER_MUTED)),
-        ]),
-        Line::from(Span::styled(
-            "└─────────────────────────┘",
-            Style::default().fg(theme::BORDER_MUTED),
-        )),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("Press ", Style::default().fg(theme::TEXT_MUTED)),
-            Span::styled(" a ", Style::default().fg(theme::BG_DARK).bg(theme::ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled(" to add your first task", Style::default().fg(theme::TEXT_MUTED)),
-        ]),
-    ];
+/// Information about the last list render, used for animation targeting.
+#[derive(Debug, Clone)]
+pub struct ListRenderInfo {
+    /// The content area of the list (excluding title)
+    pub content_area: Rect,
+    /// The scroll offset of the list
+    pub scroll_offset: usize,
+    /// Task IDs in visible order
+    pub task_ids: Vec<String>,
+}
 
-    let empty = Paragraph::new(empty_text)
+impl ListRenderInfo {
+    /// Calculates the screen rectangle for a task at the given index.
+    ///
+    /// Returns `None` if the task is not currently visible on screen.
+    pub fn task_row_rect(&self, task_index: usize) -> Option<Rect> {
+        if task_index < self.scroll_offset {
+            return None;
+        }
+        let row_in_view = task_index - self.scroll_offset;
+        if row_in_view as u16 >= self.content_area.height {
+            return None;
+        }
+        Some(Rect {
+            x: self.content_area.x,
+            y: self.content_area.y + row_in_view as u16,
+            width: self.content_area.width,
+            height: 1,
+        })
+    }
+
+    /// Finds the index and rect for a task by ID.
+    pub fn find_task_rect(&self, task_id: &str) -> Option<Rect> {
+        let index = self.task_ids.iter().position(|id| id == task_id)?;
+        self.task_row_rect(index)
+    }
+}
+
+std::thread_local! {
+    static LAST_LIST_RENDER: std::cell::RefCell<Option<ListRenderInfo>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Returns the last list render info for animation targeting.
+pub fn take_last_render_info() -> Option<ListRenderInfo> {
+    LAST_LIST_RENDER.with(|cell| cell.borrow_mut().take())
+}
+
+/// Detects the type of empty state and renders appropriate artwork.
+fn render_empty_state(frame: &mut Frame, block: Block, area: Rect, app: &App) {
+    let muted = Style::default().fg(theme::TEXT_MUTED);
+    let bold_secondary = Style::default()
+        .fg(theme::TEXT_SECONDARY)
+        .add_modifier(Modifier::BOLD);
+    let key_style = Style::default()
+        .fg(theme::BG_DARK)
+        .bg(theme::ACCENT)
+        .add_modifier(Modifier::BOLD);
+    let border = Style::default().fg(theme::BORDER_MUTED);
+    let primary = Style::default()
+        .fg(theme::PRIMARY_LIGHT)
+        .add_modifier(Modifier::BOLD);
+    let success = Style::default()
+        .fg(theme::SUCCESS)
+        .add_modifier(Modifier::BOLD);
+
+    // Detect which empty state we're in
+    let has_any_tasks = !app.tasks.is_empty();
+    let all_completed = has_any_tasks
+        && app
+            .tasks
+            .iter()
+            .all(|t| t.status == TaskStatus::Completed || t.status == TaskStatus::Archived);
+    let is_filtered = !matches!(app.filter, Filter::All | Filter::Pending);
+    let is_project_view = app.selected_project_index > 0;
+
+    let lines: Vec<Line> = if all_completed && !is_filtered {
+        // All tasks completed - celebration
+        vec![
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled("  ___  ", border)),
+            Line::from(Span::styled(" |   | ", border)),
+            Line::from(Span::styled(" | # | ", success)),
+            Line::from(Span::styled(" |___| ", border)),
+            Line::from(Span::styled("  /_\\  ", Style::default().fg(theme::ACCENT))),
+            Line::from(""),
+            Line::from(Span::styled("ALL DONE!", success)),
+            Line::from(""),
+            Line::from(Span::styled(
+                "Every task is completed. Great work!",
+                muted,
+            )),
+        ]
+    } else if is_filtered {
+        // Filter shows empty results
+        vec![
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled("  (  )", border)),
+            Line::from(Span::styled(" / __ \\", border)),
+            Line::from(Span::styled("| /  \\|", border)),
+            Line::from(Span::styled(" \\ -- /", border)),
+            Line::from(Span::styled("  \\  / ", border)),
+            Line::from(""),
+            Line::from(Span::styled("Nothing here", bold_secondary)),
+            Line::from(""),
+            Line::from(Span::styled(
+                "No tasks match the current filter",
+                muted,
+            )),
+            Line::from(vec![
+                Span::styled("Press ", muted),
+                Span::styled(" f ", key_style),
+                Span::styled(" to change filters", muted),
+            ]),
+        ]
+    } else if is_project_view && !has_any_tasks {
+        // Project is empty
+        vec![
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled("  ┌───┐ ", border)),
+            Line::from(Span::styled(" ┌┘   └┐", border)),
+            Line::from(Span::styled(" │     │", border)),
+            Line::from(Span::styled(" │     │", border)),
+            Line::from(Span::styled(" └─────┘", border)),
+            Line::from(""),
+            Line::from(Span::styled("Empty project", bold_secondary)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press ", muted),
+                Span::styled(" a ", key_style),
+                Span::styled(" to add a task", muted),
+            ]),
+        ]
+    } else {
+        // No tasks at all - rocket ship
+        vec![
+            Line::from(""),
+            Line::from(""),
+            Line::from(Span::styled("    /\\    ", primary)),
+            Line::from(Span::styled("   /  \\   ", primary)),
+            Line::from(Span::styled("  | {} |  ", primary)),
+            Line::from(Span::styled("  |    |  ", primary)),
+            Line::from(Span::styled(" /|    |\\ ", primary)),
+            Line::from(Span::styled("/ |____| \\", primary)),
+            Line::from(Span::styled("  |    |  ", Style::default().fg(theme::ACCENT))),
+            Line::from(Span::styled("  \\~~~~/ ", Style::default().fg(theme::WARNING))),
+            Line::from(""),
+            Line::from(Span::styled("Ready for liftoff!", bold_secondary)),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Press ", muted),
+                Span::styled(" a ", key_style),
+                Span::styled(" to add your first task", muted),
+            ]),
+        ]
+    };
+
+    let empty = Paragraph::new(lines)
         .alignment(Alignment::Center)
         .block(block);
 

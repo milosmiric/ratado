@@ -75,6 +75,22 @@ pub async fn handle_event(app: &mut App, event: AppEvent) -> Result<bool, AppErr
         AppEvent::Key(key) => {
             debug!("Key event: {:?}", key);
 
+            // Skip splash screen on any keypress (except force quit)
+            if app.current_view == crate::app::View::Splash {
+                // Allow force quit (Ctrl+C) to pass through
+                if key.code == crossterm::event::KeyCode::Char('c')
+                    && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                {
+                    app.animation.cancel_splash();
+                    app.current_view = crate::app::View::Main;
+                    // Fall through to normal key handling for force quit
+                } else {
+                    app.animation.cancel_splash();
+                    app.current_view = crate::app::View::Main;
+                    return Ok(true);
+                }
+            }
+
             // If a dialog is active, route events to it first
             if app.dialog.is_some() {
                 return handle_dialog_key(app, key).await;
@@ -126,17 +142,19 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             app.set_status("Task updated");
                             app.update_task_in_place(task);
                         } else {
+                            let task_id = task.id.clone();
                             app.db.insert_task(&task).await?;
                             app.set_status("Task created");
                             app.add_task_in_place(task);
+                            app.pending_new_task_animation = Some(task_id);
                         }
                         app.refresh_tags().await?;
                     }
-                    // Dialog closed, don't put it back
+                    app.start_closing_dialog(Dialog::AddTask(add_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed, don't put it back
+                    app.start_closing_dialog(Dialog::AddTask(add_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -156,11 +174,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                         app.refresh_tags().await?;
                         app.set_status("Task deleted");
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Confirm(confirm_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Confirm(confirm_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -179,10 +197,10 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     let count = app.visible_tasks().len();
                     app.selected_task_index = if count > 0 { Some(0) } else { None };
                     app.set_status(format!("Filter: {:?}, Sort: {:?}", app.filter, app.sort));
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::FilterSort(filter_dialog));
                 }
                 DialogAction::Cancel => {
-                    // Dialog closed without applying changes
+                    app.start_closing_dialog(Dialog::FilterSort(filter_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -216,11 +234,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     app.load_data().await?;
                     // Reset project selection to "All Tasks"
                     app.selected_project_index = 0;
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::DeleteProject(delete_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::DeleteProject(delete_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -243,11 +261,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                         }
                         app.projects = app.db.get_all_projects().await?;
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Project(project_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Project(project_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -275,11 +293,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             app.update_task_in_place(task);
                         }
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::MoveToProject(move_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::MoveToProject(move_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -315,11 +333,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             }
                         }
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Settings(settings_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Settings(settings_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -332,16 +350,18 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
             match action {
                 QuickCaptureAction::Submit => {
                     if let Some(task) = capture_dialog.to_task() {
+                        let task_id = task.id.clone();
                         app.db.insert_task(&task).await?;
                         app.set_status("Task created");
                         app.add_task_in_place(task);
                         app.refresh_tags().await?;
+                        app.pending_new_task_animation = Some(task_id);
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::QuickCapture(capture_dialog));
                 }
                 QuickCaptureAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::QuickCapture(capture_dialog));
                 }
                 QuickCaptureAction::ExpandToFull => {
                     let add_dialog = capture_dialog.to_add_task_dialog();
@@ -378,6 +398,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_key_event_quit() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
 
         let result = handle_event(&mut app, AppEvent::Key(key)).await.unwrap();
@@ -388,6 +409,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_key_event_navigation() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
 
         // Add some tasks first
         let task = crate::models::Task::new("Test task");
@@ -434,6 +456,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_unmapped_key() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
 
         // F5 is not mapped to any command
         let key = KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE);
@@ -445,6 +468,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_force_quit() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
 
         let result = handle_event(&mut app, AppEvent::Key(key)).await.unwrap();

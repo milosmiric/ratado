@@ -33,6 +33,7 @@ tokio = { version = "1.49.0", features = [
 toml = "0.9.11"
 tui-logger = "0.18.0"
 turso = "0.4.3"
+tachyonfx = { version = "0.22", features = ["std-duration"] }
 uuid = { version = "1.19.0", features = ["v4", "serde", "v7"] }
 
 [dev-dependencies]

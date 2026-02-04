@@ -30,8 +30,11 @@ struct Cli {
     db_path: Option<PathBuf>,
 }
 
-/// Tick rate for the event loop (250ms for checking reminders)
-const TICK_RATE: Duration = Duration::from_millis(250);
+/// Tick rate for the event loop (60fps).
+///
+/// Polling at 16ms is nearly free (just an OS syscall). The `needs_redraw` flag
+/// in the main loop prevents unnecessary rendering when idle, so CPU stays low.
+const TICK_RATE: Duration = Duration::from_millis(16);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -103,6 +106,8 @@ fn restore_terminal() -> io::Result<()> {
 /// Main application loop.
 ///
 /// Handles rendering, input events, and ticks until the app signals to quit.
+/// Runs at a fixed 16ms tick (60fps). The `needs_redraw` flag skips rendering
+/// when nothing has changed, keeping idle CPU usage low.
 async fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     app: &mut App,
@@ -110,15 +115,73 @@ async fn run_app<B: ratatui::backend::Backend>(
 where
     <B as ratatui::backend::Backend>::Error: 'static,
 {
-    // Create event handler
     let mut events = EventHandler::new(TICK_RATE);
 
+    let mut needs_redraw = true;
+
     loop {
-        // Draw the UI
-        terminal.draw(|frame| ui::draw(frame, app))?;
+        if needs_redraw {
+            // Draw the UI, then process effects on the buffer
+            terminal.draw(|frame| {
+                ui::draw(frame, app);
+                let area = frame.area();
+
+                // Lazy-start splash animation on first frame (needs terminal area)
+                if app.current_view == ratado::app::View::Splash && !app.splash_started {
+                    app.splash_started = true;
+                    app.animation.start_splash();
+                }
+
+                // Process pending task animations using render info
+                if let Some(render_info) = ui::task_list::take_last_render_info() {
+                    // New task coalesce animation
+                    if let Some(task_id) = app.pending_new_task_animation.take() {
+                        if let Some(rect) = render_info.find_task_rect(&task_id) {
+                            app.animation.start_task_new(rect);
+                        }
+                    }
+                    // Task complete flash animation
+                    if let Some(task_id) = app.pending_complete_animation.take() {
+                        if let Some(rect) = render_info.find_task_rect(&task_id) {
+                            app.animation.start_task_complete(rect);
+                        }
+                    }
+                    // Priority change flash animation
+                    if let Some((task_id, color)) = app.pending_priority_animation.take() {
+                        if let Some(rect) = render_info.find_task_rect(&task_id) {
+                            app.animation.start_priority_flash(rect, color);
+                        }
+                    }
+                }
+
+                // Process effects after widgets have rendered
+                app.animation.process(frame.buffer_mut(), area);
+            })?;
+            needs_redraw = false;
+        }
 
         // Wait for and handle the next event
         if let Some(event) = events.next().await {
+            match &event {
+                ratado::handlers::AppEvent::Key(_)
+                | ratado::handlers::AppEvent::Resize(_, _)
+                | ratado::handlers::AppEvent::Mouse(_) => {
+                    needs_redraw = true;
+                }
+                ratado::handlers::AppEvent::Tick => {
+                    // Redraw on tick if animations are active or state transitions are pending
+                    if app.animation.has_active_effects()
+                        || app.current_view == ratado::app::View::Splash
+                        || !app.dissolving_tasks.is_empty()
+                        || app.pending_new_task_animation.is_some()
+                        || app.pending_complete_animation.is_some()
+                        || app.pending_priority_animation.is_some()
+                    {
+                        needs_redraw = true;
+                    }
+                }
+            }
+
             // handle_event returns false when the app should quit
             if !handle_event(app, event).await? {
                 break;

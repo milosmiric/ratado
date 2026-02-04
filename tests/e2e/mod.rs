@@ -70,6 +70,9 @@ impl RatadoTest {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let db_path = temp_dir.path().join("test_ratado.db");
 
+        // Disable animations in spawned process (inherited env var)
+        unsafe { std::env::set_var("RATADO_NO_ANIMATIONS", "1") };
+
         let binary_path = env!("CARGO_BIN_EXE_ratado");
         let cmd = format!("{} -d {}", binary_path, db_path.to_str().unwrap());
 
@@ -90,10 +93,13 @@ impl RatadoTest {
         }
     }
 
-    /// Waits for the application to fully initialize by expecting the header.
+    /// Waits for the application to fully initialize by expecting the main view.
+    ///
+    /// Animations and splash screen are disabled via RATADO_NO_ANIMATIONS env var.
     pub fn wait_for_startup(&mut self) -> &mut Self {
         self.session.set_expect_timeout(Some(EXTENDED_TIMEOUT));
-        let _ = self.session.expect(Regex("Ready to go|All Tasks|RATADO"));
+        // Wait for main view to be ready (Tasks header or empty state)
+        let _ = self.session.expect(Regex("Tasks|liftoff"));
         self.session.set_expect_timeout(Some(DEFAULT_TIMEOUT));
         self
     }
@@ -182,11 +188,12 @@ impl RatadoTest {
     pub fn add_task(&mut self, title: &str) -> &mut Self {
         // Open quick capture dialog
         self.press("a");
+        std::thread::sleep(Duration::from_millis(100));
         // Type the title
         self.type_text(title);
         // Submit with Enter
         self.press_enter();
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(200));
         self
     }
 
@@ -208,7 +215,7 @@ impl RatadoTest {
         self.press("d");
         std::thread::sleep(Duration::from_millis(100));
         self.press("y");
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(200));
         self
     }
 
@@ -231,7 +238,7 @@ impl RatadoTest {
         std::thread::sleep(Duration::from_millis(50));
         // Confirm
         self.press_enter();
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(200));
         self
     }
 

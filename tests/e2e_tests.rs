@@ -27,7 +27,7 @@ fn test_app_starts_and_shows_empty_state() {
     app.wait_for_startup();
 
     // UI: verify empty state message is shown
-    app.expect_text("Ready to go");
+    app.expect_text("Ready for liftoff");
 
     // Verify database was created on disk
     assert!(app.database_exists(), "Database file should exist");
