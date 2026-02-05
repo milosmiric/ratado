@@ -104,6 +104,9 @@ impl Database {
     ///
     /// Returns an error if the query fails.
     pub async fn get_all_tasks(&self) -> Result<Vec<Task>> {
+        // Load all task-tag associations in one query (fixes N+1)
+        let tag_map = self.get_all_task_tags().await?;
+
         let mut rows = self
             .query(
                 "SELECT id, title, description, due_date, priority, status,
@@ -116,7 +119,7 @@ impl Database {
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
             let mut task = row_to_task(&row)?;
-            task.tags = self.get_tags_for_task(&task.id).await?;
+            task.tags = tag_map.get(&task.id).cloned().unwrap_or_default();
             tasks.push(task);
         }
 
@@ -311,6 +314,9 @@ impl Database {
     ///
     /// Returns an error if the query fails.
     pub async fn query_tasks(&self, filter: &Filter, sort: &SortOrder) -> Result<Vec<Task>> {
+        // Load all task-tag associations in one query (fixes N+1)
+        let tag_map = self.get_all_task_tags().await?;
+
         // Build the WHERE clause based on filter
         let (where_clause, params) = build_filter_clause(filter);
         let order_clause = build_order_clause(sort);
@@ -327,7 +333,7 @@ impl Database {
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
             let mut task = row_to_task(&row)?;
-            task.tags = self.get_tags_for_task(&task.id).await?;
+            task.tags = tag_map.get(&task.id).cloned().unwrap_or_default();
             tasks.push(task);
         }
 

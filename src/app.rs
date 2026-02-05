@@ -25,8 +25,10 @@
 //! # }
 //! ```
 
+use std::collections::HashSet;
 use std::time::Instant;
 
+use ratatui::layout::Rect;
 use thiserror::Error;
 use tui_logger::TuiWidgetState;
 
@@ -34,6 +36,7 @@ use crate::models::{Filter, Priority, Project, SortOrder, Task, TaskStatus};
 use crate::storage::{Database, StorageError, Tag};
 use crate::ui::calendar::CalendarState;
 use crate::ui::dialogs::Dialog;
+use crate::ui::effects::AnimationState;
 use crate::ui::search::SearchResult;
 
 /// How long status messages are displayed before auto-clearing (in seconds).
@@ -55,8 +58,10 @@ pub type Result<T> = std::result::Result<T, AppError>;
 /// Determines which screen/layout is shown to the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum View {
-    /// Main view with sidebar and task list
+    /// Startup splash screen
     #[default]
+    Splash,
+    /// Main view with sidebar and task list
     Main,
     /// Detailed view of a single task
     TaskDetail,
@@ -170,6 +175,30 @@ pub struct App {
 
     /// Calendar view state
     pub calendar_state: CalendarState,
+
+    /// Animation and visual effects state
+    pub animation: AnimationState,
+
+    /// Whether the splash screen has been started (lazy init, needs terminal area)
+    pub splash_started: bool,
+
+    /// Task IDs currently being dissolved (deletion animation)
+    pub dissolving_tasks: HashSet<String>,
+
+    /// Last known task list area (updated during render for row targeting)
+    pub last_task_list_area: Option<Rect>,
+
+    /// Last known list scroll offset (for calculating row rects)
+    pub last_list_scroll_offset: usize,
+
+    /// Task IDs that should get a "new task" animation on next render
+    pub pending_new_task_animation: Option<String>,
+
+    /// Task IDs that should get a "complete" animation on next render
+    pub pending_complete_animation: Option<String>,
+
+    /// Task IDs that should get a "priority" animation with color on next render
+    pub pending_priority_animation: Option<(String, ratatui::style::Color)>,
 }
 
 impl App {
@@ -194,7 +223,7 @@ impl App {
             tasks: Vec::new(),
             projects: Vec::new(),
             tags: Vec::new(),
-            current_view: View::Main,
+            current_view: View::Splash,
             input_mode: InputMode::Normal,
             focus: FocusPanel::TaskList,
             selected_task_index: None,
@@ -212,7 +241,21 @@ impl App {
             search_results: Vec::new(),
             selected_search_index: 0,
             calendar_state: CalendarState::new(),
+            animation: AnimationState::new(),
+            splash_started: false,
+            dissolving_tasks: HashSet::new(),
+            last_task_list_area: None,
+            last_list_scroll_offset: 0,
+            pending_new_task_animation: None,
+            pending_complete_animation: None,
+            pending_priority_animation: None,
         };
+        // Disable animations and splash when RATADO_NO_ANIMATIONS is set (e.g., E2E tests)
+        if std::env::var("RATADO_NO_ANIMATIONS").is_ok() {
+            app.animation.enabled = false;
+            app.current_view = View::Main;
+        }
+
         app.load_data().await?;
         Ok(app)
     }
@@ -226,7 +269,23 @@ impl App {
         self.projects = self.db.get_all_projects().await?;
         self.tags = self.db.get_all_tags().await?;
 
-        // Reset task selection if out of bounds
+        self.adjust_task_selection();
+
+        Ok(())
+    }
+
+    /// Refreshes data from the database.
+    ///
+    /// Call this after modifying data to sync the UI with the database.
+    pub async fn refresh(&mut self) -> Result<()> {
+        self.load_data().await
+    }
+
+    /// Adjusts the selected task index to remain valid after tasks change.
+    ///
+    /// Call this after modifying `self.tasks` in-place to keep the selection
+    /// within bounds.
+    pub fn adjust_task_selection(&mut self) {
         let visible_count = self.visible_tasks().len();
         if visible_count == 0 {
             self.selected_task_index = None;
@@ -237,15 +296,49 @@ impl App {
         } else {
             self.selected_task_index = Some(0);
         }
-
-        Ok(())
     }
 
-    /// Refreshes data from the database.
+    /// Updates a task in the in-memory task list without reloading from the database.
     ///
-    /// Call this after modifying data to sync the UI with the database.
-    pub async fn refresh(&mut self) -> Result<()> {
-        self.load_data().await
+    /// Finds the task by ID and replaces it. Does nothing if the task is not found.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The updated task to replace in the list
+    pub fn update_task_in_place(&mut self, task: Task) {
+        if let Some(existing) = self.tasks.iter_mut().find(|t| t.id == task.id) {
+            *existing = task;
+        }
+        self.adjust_task_selection();
+    }
+
+    /// Removes a task from the in-memory task list without reloading from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `task_id` - The ID of the task to remove
+    pub fn remove_task_in_place(&mut self, task_id: &str) {
+        self.tasks.retain(|t| t.id != task_id);
+        self.adjust_task_selection();
+    }
+
+    /// Adds a task to the front of the in-memory task list without reloading from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to add
+    pub fn add_task_in_place(&mut self, task: Task) {
+        self.tasks.insert(0, task);
+        self.adjust_task_selection();
+    }
+
+    /// Reloads only the tags list from the database.
+    ///
+    /// Use this after operations that may change tag associations (add/edit/delete task with tags)
+    /// without needing a full `load_data()` reload.
+    pub async fn refresh_tags(&mut self) -> Result<()> {
+        self.tags = self.db.get_all_tags().await?;
+        Ok(())
     }
 
     /// Returns the list of tasks after applying current filter and sort.
@@ -456,15 +549,42 @@ impl App {
         self.status_message_set_at = None;
     }
 
+    /// Closes a dialog, cancelling any in-progress open animation.
+    ///
+    /// The dialog is dropped immediately. Any stale targeted effects
+    /// are also cleared to prevent them from writing to outdated screen areas.
+    pub fn start_closing_dialog(&mut self, _dialog: Dialog) {
+        self.animation.start_dialog_close();
+        self.animation.clear_targeted_effects();
+    }
+
     /// Called on each tick of the event loop.
     ///
-    /// Used for time-based updates like clearing status messages.
+    /// Used for time-based updates like clearing status messages,
+    /// splash screen transitions, and closing dialog timeouts.
     pub fn on_tick(&mut self) {
         // Auto-clear status message after timeout
         if let Some(set_at) = self.status_message_set_at
             && set_at.elapsed().as_secs() >= STATUS_MESSAGE_TIMEOUT_SECS {
                 self.clear_status();
             }
+
+        // Splash → Main transition when animation completes
+        if self.current_view == View::Splash
+            && self.splash_started
+            && !self.animation.has_active_effects()
+        {
+            self.current_view = View::Main;
+        }
+
+        // Remove dissolving tasks after animation timeout (~300ms)
+        // This is handled by checking if targeted effects are done
+        if !self.dissolving_tasks.is_empty() && !self.animation.has_active_effects() {
+            let ids: Vec<String> = self.dissolving_tasks.drain().collect();
+            for id in ids {
+                self.remove_task_in_place(&id);
+            }
+        }
     }
 
     /// Cycles through filter options.
@@ -555,7 +675,7 @@ mod tests {
     async fn test_app_new() {
         let app = setup_app().await;
         assert!(!app.should_quit);
-        assert_eq!(app.current_view, View::Main);
+        assert_eq!(app.current_view, View::Splash);
         assert_eq!(app.input_mode, InputMode::Normal);
         assert_eq!(app.focus, FocusPanel::TaskList);
     }
@@ -645,6 +765,58 @@ mod tests {
 
         app.select_previous_project();
         assert_eq!(app.selected_project_index, 0); // Back to All
+    }
+
+    #[tokio::test]
+    async fn test_update_task_in_place() {
+        let mut app = setup_app().await;
+        let task = Task::new("Original");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+
+        let mut updated = app.tasks[0].clone();
+        updated.title = "Updated".to_string();
+        app.update_task_in_place(updated);
+
+        assert_eq!(app.tasks[0].title, "Updated");
+    }
+
+    #[tokio::test]
+    async fn test_remove_task_in_place() {
+        let mut app = setup_app().await;
+        let task = Task::new("To remove");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+        assert_eq!(app.tasks.len(), 1);
+
+        app.remove_task_in_place(&task.id);
+        assert!(app.tasks.is_empty());
+        assert_eq!(app.selected_task_index, None);
+    }
+
+    #[tokio::test]
+    async fn test_add_task_in_place() {
+        let mut app = setup_app().await;
+        assert!(app.tasks.is_empty());
+
+        let task = Task::new("New task");
+        app.add_task_in_place(task.clone());
+
+        assert_eq!(app.tasks.len(), 1);
+        assert_eq!(app.tasks[0].title, "New task");
+        assert_eq!(app.selected_task_index, Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_adjust_task_selection_clamps() {
+        let mut app = setup_app().await;
+        let task = Task::new("Only task");
+        app.db.insert_task(&task).await.unwrap();
+        app.load_data().await.unwrap();
+        app.selected_task_index = Some(5); // Out of bounds
+
+        app.adjust_task_selection();
+        assert_eq!(app.selected_task_index, Some(0));
     }
 
     #[tokio::test]

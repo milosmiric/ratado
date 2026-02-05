@@ -17,8 +17,10 @@
 //! 2. Add a new entry to the `MIGRATIONS` array with the next version number
 //! 3. The migration will be applied automatically on next startup
 
+use std::cmp::Ordering;
+
 use crate::storage::{Database, Result, StorageError};
-use log::info;
+use log::{info, warn};
 use turso::Value;
 
 /// A database migration.
@@ -49,6 +51,15 @@ const MIGRATIONS: &[Migration] = &[
         description: "Add default Inbox project",
         sql: "INSERT OR IGNORE INTO projects (id, name, color, icon, created_at)
               VALUES ('inbox', 'Inbox', '#3498db', '📥', strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+    },
+    Migration {
+        version: 3,
+        description: "Add app metadata table for version tracking",
+        sql: "CREATE TABLE IF NOT EXISTS _app_meta (
+                  key TEXT PRIMARY KEY,
+                  value TEXT NOT NULL,
+                  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+              )",
     },
 ];
 
@@ -161,6 +172,115 @@ async fn get_current_version(db: &Database) -> Result<u32> {
     }
 }
 
+/// Compares two semantic version strings (e.g., "0.2.0" vs "0.10.0").
+///
+/// Parses each version as `major.minor.patch` and compares numerically.
+/// Falls back to lexicographic string comparison if parsing fails.
+fn compare_versions(a: &str, b: &str) -> Ordering {
+    fn parse(v: &str) -> Option<(u32, u32, u32)> {
+        let mut parts = v.split('.');
+        let major = parts.next()?.parse().ok()?;
+        let minor = parts.next()?.parse().ok()?;
+        let patch = parts.next()?.parse().ok()?;
+        Some((major, minor, patch))
+    }
+
+    match (parse(a), parse(b)) {
+        (Some(va), Some(vb)) => va.cmp(&vb),
+        _ => a.cmp(b),
+    }
+}
+
+/// Gets the stored application version from the `_app_meta` table.
+///
+/// Returns `None` if no version has been stored yet (fresh install or
+/// upgrade from a version before version tracking was added).
+async fn get_stored_app_version(db: &Database) -> Result<Option<String>> {
+    let row = db
+        .query_one(
+            "SELECT value FROM _app_meta WHERE key = 'app_version'",
+            (),
+        )
+        .await?;
+
+    match row {
+        Some(row) => match row.get_value(0)? {
+            Value::Text(v) => Ok(Some(v)),
+            _ => Ok(None),
+        },
+        None => Ok(None),
+    }
+}
+
+/// Stores the application version in the `_app_meta` table.
+async fn set_app_version(db: &Database, version: &str) -> Result<()> {
+    db.execute(
+        "INSERT OR REPLACE INTO _app_meta (key, value, updated_at)
+         VALUES ('app_version', ?1, datetime('now'))",
+        [Value::Text(version.to_string())],
+    )
+    .await?;
+    Ok(())
+}
+
+/// Checks the stored application version and updates it if needed.
+///
+/// This function should be called after [`run_migrations`] on every startup.
+/// It detects four scenarios:
+///
+/// - **No stored version** (fresh install or pre-version-tracking DB): stores current version
+/// - **Same version**: logs info, no database write
+/// - **Upgrade** (stored < current): logs the upgrade, updates stored version
+/// - **Downgrade** (stored > current): logs a warning, updates stored version
+///
+/// # Arguments
+///
+/// * `db` - The database connection (must have `_app_meta` table already created via migrations)
+///
+/// # Errors
+///
+/// Returns an error if the version cannot be read from or written to the database.
+pub async fn check_and_update_app_version(db: &Database) -> Result<()> {
+    let current = env!("CARGO_PKG_VERSION");
+    let stored = get_stored_app_version(db).await?;
+
+    match stored {
+        None => {
+            info!(
+                "No stored app version found — recording v{} (fresh install or upgrade from pre-tracking version)",
+                current
+            );
+            set_app_version(db, current).await?;
+        }
+        Some(ref stored_version) if stored_version == current => {
+            info!("App version unchanged (v{})", current);
+        }
+        Some(ref stored_version) => match compare_versions(stored_version, current) {
+            Ordering::Less => {
+                info!(
+                    "App upgraded from v{} to v{}",
+                    stored_version, current
+                );
+                set_app_version(db, current).await?;
+            }
+            Ordering::Greater => {
+                warn!(
+                    "App downgraded from v{} to v{} — database was last used by a newer version",
+                    stored_version, current
+                );
+                set_app_version(db, current).await?;
+            }
+            Ordering::Equal => {
+                // Should not reach here due to the string equality check above,
+                // but handle it gracefully
+                info!("App version unchanged (v{})", current);
+            }
+        },
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,12 +326,12 @@ mod tests {
         run_migrations(&db).await.unwrap();
         run_migrations(&db).await.unwrap();
 
-        // Should still have exactly 2 migrations recorded
+        // Should still have exactly 3 migrations recorded
         let result = db
             .query_scalar("SELECT COUNT(*) FROM _migrations", ())
             .await
             .unwrap();
-        assert_eq!(result, Some(Value::Integer(2)));
+        assert_eq!(result, Some(Value::Integer(3)));
     }
 
     #[tokio::test]
@@ -220,7 +340,7 @@ mod tests {
         run_migrations(&db).await.unwrap();
 
         let version = get_current_version(&db).await.unwrap();
-        assert_eq!(version, 2); // We have 2 migrations
+        assert_eq!(version, 3); // We have 3 migrations
     }
 
     #[tokio::test]
@@ -239,5 +359,62 @@ mod tests {
 
         // We create 5 indexes on tasks table
         assert_eq!(result, Some(Value::Integer(5)));
+    }
+
+    #[tokio::test]
+    async fn test_app_meta_table_created() {
+        let db = Database::open_in_memory().await.unwrap();
+        run_migrations(&db).await.unwrap();
+
+        let result = db
+            .query_scalar(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_app_meta'",
+                (),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, Some(Value::Integer(1)));
+    }
+
+    #[tokio::test]
+    async fn test_app_version_stored_on_first_run() {
+        let db = Database::open_in_memory().await.unwrap();
+        run_migrations(&db).await.unwrap();
+
+        // No version stored yet
+        let stored = get_stored_app_version(&db).await.unwrap();
+        assert!(stored.is_none());
+
+        // After check_and_update, version should be stored
+        check_and_update_app_version(&db).await.unwrap();
+        let stored = get_stored_app_version(&db).await.unwrap();
+        assert_eq!(stored, Some(env!("CARGO_PKG_VERSION").to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_app_version_idempotent() {
+        let db = Database::open_in_memory().await.unwrap();
+        run_migrations(&db).await.unwrap();
+
+        // Call twice
+        check_and_update_app_version(&db).await.unwrap();
+        check_and_update_app_version(&db).await.unwrap();
+
+        // Should still have exactly one entry
+        let result = db
+            .query_scalar("SELECT COUNT(*) FROM _app_meta WHERE key = 'app_version'", ())
+            .await
+            .unwrap();
+        assert_eq!(result, Some(Value::Integer(1)));
+    }
+
+    #[test]
+    fn test_compare_versions() {
+        assert_eq!(compare_versions("0.1.0", "0.2.0"), Ordering::Less);
+        assert_eq!(compare_versions("0.2.0", "0.2.0"), Ordering::Equal);
+        assert_eq!(compare_versions("0.2.0", "0.1.0"), Ordering::Greater);
+        assert_eq!(compare_versions("1.0.0", "0.9.9"), Ordering::Greater);
+        assert_eq!(compare_versions("0.10.0", "0.2.0"), Ordering::Greater);
+        assert_eq!(compare_versions("0.2.0", "0.10.0"), Ordering::Less);
     }
 }

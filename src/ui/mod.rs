@@ -27,12 +27,14 @@ pub mod date_picker;
 mod debug;
 pub mod description_textarea;
 pub mod dialogs;
+pub mod effects;
 mod header;
 mod help;
 pub mod input;
 mod layout;
 pub mod search;
 mod sidebar;
+pub mod splash;
 mod status_bar;
 pub mod tag_input;
 mod task_detail;
@@ -75,6 +77,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // First render the base view
     match app.current_view {
+        View::Splash => splash::render_splash(frame, area),
         View::Main => layout::render_main_view(frame, app, frame.area()),
         View::Help => help::render_help(frame, app, frame.area()),
         View::DebugLogs => debug::render_debug_logs(frame, app, frame.area()),
@@ -91,7 +94,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Calendar => calendar::render_calendar(frame, app, frame.area()),
     }
 
-    // Then render any active dialog on top
+    // Render any active dialog on top
     if let Some(ref dialog) = app.dialog {
         dialog.render(frame);
     }

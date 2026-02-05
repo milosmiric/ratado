@@ -27,6 +27,7 @@ Ratado is a terminal-based task manager built with Rust and the Ratatui framewor
 
 | Feature | Description | Status |
 |---------|-------------|--------|
+| Quick Capture | Rapid single-line task entry with inline syntax | ✓ Implemented |
 | Create Task | Add new tasks with title, description, due date, priority | ✓ Implemented |
 | Edit Task | Modify any task attribute | ✓ Implemented |
 | Delete Task | Remove tasks with confirmation | ✓ Implemented |
@@ -78,7 +79,7 @@ Ratado is a terminal-based task manager built with Rust and the Ratatui framewor
 ### 3.1 Layout
 
 ```
-Ratado v0.1.0   [Overdue: 2] [Due Today: 3]  12 tasks total
+Ratado v0.2.0   [Overdue: 2] [Due Today: 3]  12 tasks total
 ──────────────────────────────────────────────────────────────────────
 PROJECTS          │ TASKS  [Pending]  [Due Date ↑]
                   │
@@ -96,7 +97,7 @@ PROJECTS          │ TASKS  [Pending]  [Due Date ↑]
                   │   [ ]  ↓ Organize desk                  @Inbox  #home
                   │
 ──────────────────────────────────────────────────────────────────────
-a Add  e Edit  Space Done  / Search  c Calendar  f Filter  ? Help
+a Capture  A Add  e Edit  d Del  Space Done  / Search  c Calendar  f Filter  ? Help
 ```
 
 ### 3.2 Views
@@ -244,7 +245,8 @@ Ratado uses a cohesive dark theme with a blue-violet gradient as its signature l
 
 | Key | Context | Action |
 |-----|---------|--------|
-| `a` | Task List | Add new task |
+| `a` | Task List | Quick capture task |
+| `A` | Task List | Add task (full form) |
 | `a` | Sidebar | Add new project |
 | `e` / `Enter` | Task List | Edit selected task |
 | `e` / `Enter` | Sidebar | Edit selected project |
@@ -390,26 +392,59 @@ The calendar view has two focus states: Day Grid and Task List. Press `Tab` to t
 - `Enter` - Apply selection
 - `Esc` - Cancel
 
-### 5.4 Project Dialog
+### 5.4 Quick Capture Dialog
+
+A spotlight-style overlay for rapid single-line task entry. Opened with `a` from the task list.
+
+**Inline Syntax:**
+
+| Token | Meaning | Examples |
+|-------|---------|---------|
+| `@Name` | Project (fuzzy matched) | `@Work`, `@back` → "Backend" |
+| `#tag` | Tag | `#urgent`, `#bug` |
+| `!1`–`!4` | Priority (1=urgent, 4=low) | `!1` |
+| `due:val` | Due date | `due:tomorrow`, `due:fri` |
+| `\@` `\#` | Escaped literals | `\@email` stays in title |
+| Everything else | Title | Joined remaining words |
+
+**Features:**
+- Real-time autocomplete dropdown for projects (`@`), tags (`#`), and priorities (`!`)
+- Project-scoped tag suggestions (tags used in the selected project appear first)
+- Live preview of parsed title and metadata badges
+- Syntax highlighting in the input line
+- Pre-selects the current project when opened from a project view
+
+**Navigation:**
+- `Enter` - Submit task
+- `Esc` - Cancel
+- `Tab` - Accept autocomplete suggestion, or expand to full Add Task dialog if no suggestions
+- `↑` / `↓` - Navigate autocomplete dropdown
+
+### 5.5 Project Dialog
 
 **Fields:**
 - Name (required)
-- Color (hex code)
-- Icon (emoji)
+- Color (16 preset colors displayed as colored circles in 2 rows of 8)
+- Icon (16 preset emoji icons displayed in 2 rows of 8)
 
-### 5.5 Delete Project Dialog
+**Color Selection Navigation:**
+- `←` / `→` / `h` / `l` - Move between colors (wraps)
+- `↑` / `↓` / `k` / `j` - Move between rows
+- `1`–`8` - Select color in first row directly
+
+### 5.6 Delete Project Dialog
 
 **Options:**
 - Move tasks to Inbox
 - Delete all tasks
 - Cancel
 
-### 5.6 Move to Project Dialog
+### 5.7 Move to Project Dialog
 
 - List of available projects
 - Navigate and select destination
 
-### 5.7 Settings Dialog
+### 5.8 Settings Dialog
 
 **Options:**
 - Delete all completed tasks
@@ -457,7 +492,9 @@ The calendar view has two focus states: Day Grid and Task List. Press `Tab` to t
 
 - **Type**: Turso (SQLite-compatible, pure Rust, async)
 - **Location**: `~/Library/Application Support/ratado/ratado.db` (macOS) or `~/.config/ratado/ratado.db` (Linux)
+- **Custom Path**: Override with `--db-path` / `-d` CLI flag
 - **Migrations**: Auto-run on startup
+- **Version Tracking**: Application version stored in `_app_meta` table; detects upgrades/downgrades on startup
 
 ### 7.2 Schema
 
@@ -505,6 +542,15 @@ CREATE TABLE task_tags (
 );
 ```
 
+**_app_meta table:**
+```sql
+CREATE TABLE _app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
 ### 7.3 Data Integrity
 
 - Foreign key constraints enabled
@@ -543,6 +589,7 @@ src/
 │       ├── project.rs
 │       ├── delete_project.rs
 │       ├── move_to_project.rs
+│       ├── quick_capture.rs # Quick capture spotlight dialog
 │       └── settings.rs
 ├── models/              # Data models
 │   ├── mod.rs
@@ -565,6 +612,10 @@ src/
     ├── mod.rs
     ├── datetime.rs      # Date formatting
     └── ids.rs           # UUID generation
+tests/
+├── e2e_tests.rs         # End-to-end integration tests
+└── e2e/
+    └── mod.rs           # E2E test utilities and helpers
 ```
 
 ### 8.2 Application State
@@ -617,6 +668,15 @@ loop {
 | log | Logging facade |
 | tui-logger | In-app log viewer |
 | directories | Config directory resolution |
+| clap | CLI argument parsing |
+| human-date-parser | Natural language date parsing for Quick Capture |
+
+**Dev Dependencies:**
+
+| Crate | Purpose |
+|-------|---------|
+| expectrl | Terminal interaction for E2E tests |
+| tempfile | Temporary test databases |
 
 ---
 
@@ -636,8 +696,22 @@ The following features are **not currently implemented** but could be added:
 
 ---
 
-## 11. Version History
+## 11. Command Line Interface
+
+```
+ratado [OPTIONS]
+
+Options:
+  -d, --db-path <PATH>  Path to the database file (defaults to platform-specific location)
+  -h, --help            Print help
+  -V, --version         Print version
+```
+
+---
+
+## 12. Version History
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 0.2.0 | 2026-02 | Quick Capture dialog, CLI database path flag, version tracking in database, enhanced project dialog (16 colors/icons), end-to-end test suite |
 | 0.1.0 | 2025 | Initial release |

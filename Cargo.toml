@@ -1,6 +1,6 @@
 [package]
 name = "ratado"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Miloš Mirić"]
 description = "A fast, keyboard-driven terminal task manager built with Rust and Ratatui"
@@ -15,6 +15,7 @@ exclude = [".github/", "docs/", ".gitignore"]
 
 [dependencies]
 chrono = { version = "0.4.42", features = ["serde"] }
+human-date-parser = "0.2"
 clap = { version = "4.5.54", features = ["derive"] }
 crossterm = "0.29.0"
 directories = "6.0.0"
@@ -32,11 +33,14 @@ tokio = { version = "1.49.0", features = [
 toml = "0.9.11"
 tui-logger = "0.18.0"
 turso = "0.4.3"
+tachyonfx = { version = "0.22", features = ["std-duration"] }
 uuid = { version = "1.19.0", features = ["v4", "serde", "v7"] }
 
 [dev-dependencies]
 insta = { version = "1.46.0", features = ["yaml"] }
 pretty_assertions = "1.4.1"
+expectrl = "0.8"
+tempfile = "3.15"
 
 # Config for 'cargo dist'
 [workspace.metadata.dist]

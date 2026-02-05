@@ -32,5 +32,5 @@ mod tags;
 mod tasks;
 
 pub use database::{Database, Result, StorageError};
-pub use migrations::run_migrations;
+pub use migrations::{check_and_update_app_version, run_migrations};
 pub use tags::Tag;

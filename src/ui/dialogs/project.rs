@@ -29,10 +29,24 @@ const PROJECT_COLORS: &[(&str, &str)] = &[
     ("#1abc9c", "Teal"),
     ("#e91e63", "Pink"),
     ("#607d8b", "Gray"),
+    ("#f1c40f", "Yellow"),
+    ("#00bcd4", "Cyan"),
+    ("#8bc34a", "Lime"),
+    ("#ff5722", "Coral"),
+    ("#795548", "Brown"),
+    ("#6366f1", "Indigo"),
+    ("#ec4899", "Rose"),
+    ("#64748b", "Slate"),
 ];
 
+/// Number of items per row in color/icon selectors.
+const ITEMS_PER_ROW: usize = 8;
+
 /// Preset icons for projects.
-const PROJECT_ICONS: &[&str] = &["📁", "📋", "🏠", "💼", "📚", "🎯", "💡", "⭐"];
+const PROJECT_ICONS: &[&str] = &[
+    "📁", "📋", "🏠", "💼", "📚", "🎯", "💡", "⭐",
+    "🚀", "🔧", "🎨", "🎵", "❤️", "🌱", "🏗️", "📦",
+];
 
 /// The currently focused field in the dialog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -188,9 +202,19 @@ impl ProjectDialog {
             KeyCode::Right | KeyCode::Char('l') => {
                 self.selected_color = (self.selected_color + 1) % PROJECT_COLORS.len();
             }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_color >= ITEMS_PER_ROW {
+                    self.selected_color -= ITEMS_PER_ROW;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.selected_color + ITEMS_PER_ROW < PROJECT_COLORS.len() {
+                    self.selected_color += ITEMS_PER_ROW;
+                }
+            }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let idx = c.to_digit(10).unwrap() as usize;
-                if idx > 0 && idx <= PROJECT_COLORS.len() {
+                if idx > 0 && idx <= ITEMS_PER_ROW {
                     self.selected_color = idx - 1;
                 }
             }
@@ -212,9 +236,19 @@ impl ProjectDialog {
             KeyCode::Right | KeyCode::Char('l') => {
                 self.selected_icon = (self.selected_icon + 1) % PROJECT_ICONS.len();
             }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_icon >= ITEMS_PER_ROW {
+                    self.selected_icon -= ITEMS_PER_ROW;
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if self.selected_icon + ITEMS_PER_ROW < PROJECT_ICONS.len() {
+                    self.selected_icon += ITEMS_PER_ROW;
+                }
+            }
             KeyCode::Char(c) if c.is_ascii_digit() => {
                 let idx = c.to_digit(10).unwrap() as usize;
-                if idx > 0 && idx <= PROJECT_ICONS.len() {
+                if idx > 0 && idx <= ITEMS_PER_ROW {
                     self.selected_icon = idx - 1;
                 }
             }
@@ -255,8 +289,8 @@ impl ProjectDialog {
         let area = frame.area();
 
         // Dialog dimensions
-        let dialog_width = 50.min(area.width.saturating_sub(4));
-        let dialog_height = 14.min(area.height.saturating_sub(4));
+        let dialog_width = 60.min(area.width.saturating_sub(4));
+        let dialog_height = 18.min(area.height.saturating_sub(4));
         let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
         // Render dimmed background
@@ -274,8 +308,8 @@ impl ProjectDialog {
         // Layout the fields
         let chunks = Layout::vertical([
             Constraint::Length(3), // Name
-            Constraint::Length(3), // Color
-            Constraint::Length(3), // Icon
+            Constraint::Length(5), // Color (border + 2 rows + hint)
+            Constraint::Length(5), // Icon (border + 2 rows + hint)
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Submit button
         ])
@@ -300,62 +334,104 @@ impl ProjectDialog {
         self.name.render_to_buffer(area, buf, focused, Some("Name"));
     }
 
-    /// Renders the color selector.
+    /// Renders the color selector with colored circles in 2 rows of 8.
     fn render_color_selector(&self, frame: &mut Frame, area: Rect, focused: bool) {
         let block = field_block("Color", focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        // Render color options
-        let mut spans = Vec::new();
-        for (i, (color_hex, _name)) in PROJECT_COLORS.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw(" "));
+        // Build two rows of color circles
+        for row in 0..2 {
+            let mut spans = Vec::new();
+            for col in 0..ITEMS_PER_ROW {
+                let i = row * ITEMS_PER_ROW + col;
+                if i >= PROJECT_COLORS.len() {
+                    break;
+                }
+                if col > 0 {
+                    spans.push(Span::raw(" "));
+                }
+
+                let (color_hex, _) = PROJECT_COLORS[i];
+                let color = parse_hex_color(color_hex);
+                let style = if i == self.selected_color {
+                    Style::default()
+                        .fg(color)
+                        .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+                } else {
+                    Style::default().fg(color)
+                };
+
+                spans.push(Span::styled(" ● ", style));
             }
 
-            let color = parse_hex_color(color_hex);
-            let style = if i == self.selected_color {
-                Style::default()
-                    .bg(color)
-                    .fg(theme::TEXT_PRIMARY)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().bg(color)
-            };
-
-            spans.push(Span::styled(format!(" {} ", i + 1), style));
+            if inner.height > row as u16 {
+                let row_area = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
+                frame.render_widget(Paragraph::new(Line::from(spans)), row_area);
+            }
         }
 
-        let line = Line::from(spans);
-        frame.render_widget(Paragraph::new(line), inner);
+        // Hint line showing selected color name
+        if inner.height > 2 {
+            let (_, color_name) = PROJECT_COLORS[self.selected_color];
+            let hint_area = Rect::new(inner.x, inner.y + 2, inner.width, 1);
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    color_name,
+                    Style::default().fg(theme::TEXT_MUTED),
+                )),
+                hint_area,
+            );
+        }
     }
 
-    /// Renders the icon selector.
+    /// Renders the icon selector with icons in 2 rows of 8.
     fn render_icon_selector(&self, frame: &mut Frame, area: Rect, focused: bool) {
         let block = field_block("Icon", focused);
         let inner = block.inner(area);
         frame.render_widget(block, area);
 
-        // Render icon options
-        let mut spans = Vec::new();
-        for (i, icon) in PROJECT_ICONS.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw(" "));
+        // Build two rows of icons
+        for row in 0..2 {
+            let mut spans = Vec::new();
+            for col in 0..ITEMS_PER_ROW {
+                let i = row * ITEMS_PER_ROW + col;
+                if i >= PROJECT_ICONS.len() {
+                    break;
+                }
+                if col > 0 {
+                    spans.push(Span::raw(" "));
+                }
+
+                let style = if i == self.selected_icon {
+                    Style::default()
+                        .fg(theme::PRIMARY_LIGHT)
+                        .add_modifier(Modifier::BOLD | Modifier::REVERSED)
+                } else {
+                    Style::default().fg(theme::TEXT_MUTED)
+                };
+
+                spans.push(Span::styled(format!(" {} ", PROJECT_ICONS[i]), style));
             }
 
-            let style = if i == self.selected_icon {
-                Style::default()
-                    .fg(theme::PRIMARY_LIGHT)
-                    .add_modifier(Modifier::BOLD | Modifier::REVERSED)
-            } else {
-                Style::default().fg(theme::TEXT_MUTED)
-            };
-
-            spans.push(Span::styled(format!(" {} ", icon), style));
+            if inner.height > row as u16 {
+                let row_area = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
+                frame.render_widget(Paragraph::new(Line::from(spans)), row_area);
+            }
         }
 
-        let line = Line::from(spans);
-        frame.render_widget(Paragraph::new(line), inner);
+        // Hint line showing selected icon
+        if inner.height > 2 {
+            let icon = PROJECT_ICONS[self.selected_icon];
+            let hint_area = Rect::new(inner.x, inner.y + 2, inner.width, 1);
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    format!("Selected: {}", icon),
+                    Style::default().fg(theme::TEXT_MUTED),
+                )),
+                hint_area,
+            );
+        }
     }
 
     /// Renders the submit button.

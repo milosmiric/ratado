@@ -50,7 +50,7 @@ use crossterm::event::KeyEvent;
 use log::debug;
 
 use crate::app::{App, AppError};
-use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction, SettingsOption};
+use crate::ui::dialogs::{DeleteProjectChoice, Dialog, DialogAction, QuickCaptureAction, SettingsOption};
 
 /// Handles an application event and updates state accordingly.
 ///
@@ -74,6 +74,22 @@ pub async fn handle_event(app: &mut App, event: AppEvent) -> Result<bool, AppErr
     match event {
         AppEvent::Key(key) => {
             debug!("Key event: {:?}", key);
+
+            // Skip splash screen on any keypress (except force quit)
+            if app.current_view == crate::app::View::Splash {
+                // Allow force quit (Ctrl+C) to pass through
+                if key.code == crossterm::event::KeyCode::Char('c')
+                    && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL)
+                {
+                    app.animation.cancel_splash();
+                    app.current_view = crate::app::View::Main;
+                    // Fall through to normal key handling for force quit
+                } else {
+                    app.animation.cancel_splash();
+                    app.current_view = crate::app::View::Main;
+                    return Ok(true);
+                }
+            }
 
             // If a dialog is active, route events to it first
             if app.dialog.is_some() {
@@ -124,17 +140,21 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                         if add_dialog.is_editing() {
                             app.db.update_task(&task).await?;
                             app.set_status("Task updated");
+                            app.update_task_in_place(task);
                         } else {
+                            let task_id = task.id.clone();
                             app.db.insert_task(&task).await?;
                             app.set_status("Task created");
+                            app.add_task_in_place(task);
+                            app.pending_new_task_animation = Some(task_id);
                         }
-                        app.load_data().await?;
+                        app.refresh_tags().await?;
                     }
-                    // Dialog closed, don't put it back
+                    app.start_closing_dialog(Dialog::AddTask(add_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed, don't put it back
+                    app.start_closing_dialog(Dialog::AddTask(add_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -147,18 +167,18 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
             match action {
                 DialogAction::Submit => {
                     // Confirmation accepted - execute the pending delete
-                    // The task ID was stored when the dialog was created
-                    // For now we handle this by checking if we have a selected task
                     if let Some(task) = app.selected_task().cloned() {
-                        app.db.delete_task(&task.id).await?;
-                        app.load_data().await?;
+                        let task_id = task.id.clone();
+                        app.db.delete_task(&task_id).await?;
+                        app.remove_task_in_place(&task_id);
+                        app.refresh_tags().await?;
                         app.set_status("Task deleted");
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Confirm(confirm_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Confirm(confirm_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -177,10 +197,10 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     let count = app.visible_tasks().len();
                     app.selected_task_index = if count > 0 { Some(0) } else { None };
                     app.set_status(format!("Filter: {:?}, Sort: {:?}", app.filter, app.sort));
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::FilterSort(filter_dialog));
                 }
                 DialogAction::Cancel => {
-                    // Dialog closed without applying changes
+                    app.start_closing_dialog(Dialog::FilterSort(filter_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -214,11 +234,11 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     app.load_data().await?;
                     // Reset project selection to "All Tasks"
                     app.selected_project_index = 0;
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::DeleteProject(delete_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::DeleteProject(delete_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -239,13 +259,13 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             app.db.insert_project(&project).await?;
                             app.set_status("Project created");
                         }
-                        app.load_data().await?;
+                        app.projects = app.db.get_all_projects().await?;
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Project(project_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Project(project_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -260,23 +280,24 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                     // Move the task to the selected project
                     if let Some(project_id) = move_dialog.selected_project_id() {
                         let task_id = move_dialog.task_id.clone();
-                        if let Some(task) = app.tasks.iter_mut().find(|t| t.id == task_id) {
+                        if let Some(task) = app.tasks.iter().find(|t| t.id == task_id) {
+                            let mut task = task.clone();
                             task.project_id = Some(project_id.clone());
                             task.updated_at = chrono::Utc::now();
-                            app.db.update_task(task).await?;
+                            app.db.update_task(&task).await?;
                             let project_name = move_dialog
                                 .selected_project()
                                 .map(|p| p.name.as_str())
                                 .unwrap_or("Unknown");
                             app.set_status(format!("Task moved to {}", project_name));
-                            app.load_data().await?;
+                            app.update_task_in_place(task);
                         }
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::MoveToProject(move_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::MoveToProject(move_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
@@ -312,15 +333,44 @@ async fn handle_dialog_key(app: &mut App, key: KeyEvent) -> Result<bool, AppErro
                             }
                         }
                     }
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Settings(settings_dialog));
                 }
                 DialogAction::Cancel => {
                     app.clear_status();
-                    // Dialog closed
+                    app.start_closing_dialog(Dialog::Settings(settings_dialog));
                 }
                 DialogAction::None => {
                     // Keep the dialog open
                     app.dialog = Some(Dialog::Settings(settings_dialog));
+                }
+            }
+        }
+        Some(Dialog::QuickCapture(mut capture_dialog)) => {
+            let action = capture_dialog.handle_key(key);
+            match action {
+                QuickCaptureAction::Submit => {
+                    if let Some(task) = capture_dialog.to_task() {
+                        let task_id = task.id.clone();
+                        app.db.insert_task(&task).await?;
+                        app.set_status("Task created");
+                        app.add_task_in_place(task);
+                        app.refresh_tags().await?;
+                        app.pending_new_task_animation = Some(task_id);
+                    }
+                    app.start_closing_dialog(Dialog::QuickCapture(capture_dialog));
+                }
+                QuickCaptureAction::Cancel => {
+                    app.clear_status();
+                    app.start_closing_dialog(Dialog::QuickCapture(capture_dialog));
+                }
+                QuickCaptureAction::ExpandToFull => {
+                    let add_dialog = capture_dialog.to_add_task_dialog();
+                    app.dialog = Some(Dialog::AddTask(Box::new(add_dialog)));
+                    app.set_status("Tab between fields, Ctrl+Enter to save");
+                }
+                QuickCaptureAction::None => {
+                    // Keep the dialog open
+                    app.dialog = Some(Dialog::QuickCapture(capture_dialog));
                 }
             }
         }
@@ -348,6 +398,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_key_event_quit() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
 
         let result = handle_event(&mut app, AppEvent::Key(key)).await.unwrap();
@@ -358,6 +409,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_key_event_navigation() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
 
         // Add some tasks first
         let task = crate::models::Task::new("Test task");
@@ -404,6 +456,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_unmapped_key() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
 
         // F5 is not mapped to any command
         let key = KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE);
@@ -415,6 +468,7 @@ mod tests {
     #[tokio::test]
     async fn test_handle_force_quit() {
         let mut app = setup_app().await;
+        app.current_view = View::Main;
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
 
         let result = handle_event(&mut app, AppEvent::Key(key)).await.unwrap();

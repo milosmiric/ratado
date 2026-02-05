@@ -34,7 +34,7 @@ use tui_logger::TuiWidgetEvent;
 
 use crate::app::{App, AppError, FocusPanel, InputMode, View};
 use crate::models::{Filter, Priority, Task};
-use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog, SettingsDialog};
+use crate::ui::dialogs::{AddTaskDialog, ConfirmDialog, DeleteProjectDialog, Dialog, FilterSortDialog, MoveToProjectDialog, ProjectDialog, QuickCaptureDialog, SettingsDialog};
 use crate::ui::search::search_tasks;
 
 /// All possible commands that can be executed in the application.
@@ -67,6 +67,8 @@ pub enum Command {
     // === Task Actions ===
     /// Start adding a new task
     AddTask,
+    /// Open Quick Capture spotlight dialog
+    QuickCapture,
     /// Edit the selected task
     EditTask,
     /// Delete the selected task
@@ -346,7 +348,26 @@ impl Command {
                 }
 
                 app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
+                app.animation.start_dialog_open();
                 app.set_status("Tab between fields, Ctrl+Enter to save");
+                Ok(true)
+            }
+
+            Command::QuickCapture => {
+                let mut dialog = QuickCaptureDialog::new(
+                    app.projects.clone(),
+                    app.tags.clone(),
+                    &app.tasks,
+                );
+
+                // Pre-select the current project (if not "All Tasks")
+                if let Some(project) = app.selected_project() {
+                    dialog.set_project(project.clone());
+                }
+
+                app.dialog = Some(Dialog::QuickCapture(Box::new(dialog)));
+                app.animation.start_quick_capture_open();
+                app.set_status("Enter/submit  Tab/expand  Esc/cancel");
                 Ok(true)
             }
 
@@ -355,6 +376,7 @@ impl Command {
                     // Open the add task dialog in edit mode with available tags
                     let dialog = AddTaskDialog::from_task(&task).with_available_tags(app.tags.clone());
                     app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
+                    app.animation.start_dialog_open();
                     app.set_status("Tab between fields, Ctrl+Enter to save");
                 }
                 Ok(true)
@@ -364,6 +386,7 @@ impl Command {
                 if let Some(task) = app.selected_task() {
                     // Open confirmation dialog
                     app.dialog = Some(Dialog::Confirm(ConfirmDialog::delete_task(&task.title)));
+                    app.animation.start_dialog_open();
                 }
                 Ok(true)
             }
@@ -371,15 +394,17 @@ impl Command {
             Command::ToggleTaskStatus => {
                 if let Some(task) = app.selected_task() {
                     let mut task = task.clone();
-                    if task.status == crate::models::TaskStatus::Completed {
-                        task.reopen();
-                        app.set_status("Task reopened");
-                    } else {
+                    let completing = task.status != crate::models::TaskStatus::Completed;
+                    if completing {
                         task.complete();
                         app.set_status("Task completed!");
+                        app.pending_complete_animation = Some(task.id.clone());
+                    } else {
+                        task.reopen();
+                        app.set_status("Task reopened");
                     }
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -393,9 +418,16 @@ impl Command {
                         Priority::High => Priority::Urgent,
                         Priority::Urgent => Priority::Low,
                     };
+                    let priority_color = match task.priority {
+                        Priority::Urgent => crate::ui::theme::PRIORITY_URGENT,
+                        Priority::High => crate::ui::theme::PRIORITY_HIGH,
+                        Priority::Medium => crate::ui::theme::PRIORITY_NORMAL,
+                        Priority::Low => crate::ui::theme::PRIORITY_LOW,
+                    };
+                    app.pending_priority_animation = Some((task.id.clone(), priority_color));
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
                     app.set_status(format!("Priority: {:?}", task.priority));
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -408,6 +440,7 @@ impl Command {
                         task.project_id.as_deref(),
                     );
                     app.dialog = Some(Dialog::MoveToProject(dialog));
+                    app.animation.start_dialog_open();
                     app.set_status("Select project to move task to");
                 }
                 Ok(true)
@@ -418,6 +451,7 @@ impl Command {
                 if let Some(task) = app.selected_task().cloned() {
                     let dialog = AddTaskDialog::from_task(&task).with_available_tags(app.tags.clone());
                     app.dialog = Some(Dialog::AddTask(Box::new(dialog)));
+                    app.animation.start_dialog_open();
                     app.set_status("Tab to Tags field, Enter to add tags");
                 }
                 Ok(true)
@@ -425,6 +459,7 @@ impl Command {
 
             Command::AddProject => {
                 app.dialog = Some(Dialog::Project(ProjectDialog::new()));
+                app.animation.start_dialog_open();
                 app.set_status("Enter project name, Tab to navigate");
                 Ok(true)
             }
@@ -434,6 +469,7 @@ impl Command {
                 if app.selected_project_index > 0 {
                     if let Some(project) = app.selected_project().cloned() {
                         app.dialog = Some(Dialog::Project(ProjectDialog::from_project(&project)));
+                        app.animation.start_dialog_open();
                         app.set_status("Edit project, Tab to navigate");
                     }
                 } else {
@@ -457,6 +493,7 @@ impl Command {
                                     task_count,
                                 ),
                             ));
+                            app.animation.start_dialog_open();
                         }
                     }
                 } else {
@@ -468,11 +505,13 @@ impl Command {
             // === Views ===
             Command::ShowMain => {
                 app.current_view = View::Main;
+                app.animation.start_view_transition();
                 Ok(true)
             }
 
             Command::ShowHelp => {
                 app.current_view = View::Help;
+                app.animation.start_view_transition();
                 Ok(true)
             }
 
@@ -480,6 +519,7 @@ impl Command {
                 app.current_view = View::Calendar;
                 // Reset calendar to today when opening
                 app.calendar_state.goto_today();
+                app.animation.start_view_transition();
                 Ok(true)
             }
 
@@ -512,6 +552,7 @@ impl Command {
             Command::CalendarSelectDay => {
                 // Return to main view - filter could be applied for selected day
                 app.current_view = View::Main;
+                app.animation.start_view_transition();
                 Ok(true)
             }
 
@@ -545,7 +586,7 @@ impl Command {
                         app.set_status("Task completed!");
                     }
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -563,8 +604,8 @@ impl Command {
                         Priority::Urgent => Priority::Low,
                     };
                     app.db.update_task(&task).await?;
-                    app.load_data().await?;
                     app.set_status(format!("Priority: {:?}", task.priority));
+                    app.update_task_in_place(task);
                 }
                 Ok(true)
             }
@@ -591,6 +632,7 @@ impl Command {
 
                     // Switch to main view
                     app.current_view = View::Main;
+                    app.animation.start_view_transition();
                     app.focus = FocusPanel::TaskList;
 
                     // Select the project in the sidebar
@@ -637,6 +679,7 @@ impl Command {
                 app.input_cursor = 0;
                 app.search_results.clear();
                 app.selected_search_index = 0;
+                app.animation.start_view_transition();
                 let project_name = app.selected_project_name().to_string();
                 if project_name != "All Tasks" {
                     app.set_status(format!("Searching in: {}", project_name));
@@ -664,6 +707,7 @@ impl Command {
                     // Find the task index in visible_tasks and select it
                     let task_id = result.task.id.clone();
                     app.current_view = View::Main;
+                    app.animation.start_view_transition();
                     app.input_mode = InputMode::Normal;
                     app.input_buffer.clear();
                     app.input_cursor = 0;
@@ -699,12 +743,14 @@ impl Command {
                 } else {
                     View::DebugLogs
                 };
+                app.animation.start_view_transition();
                 Ok(true)
             }
 
             Command::ShowTaskDetail => {
                 if app.selected_task().is_some() {
                     app.current_view = View::TaskDetail;
+                    app.animation.start_view_transition();
                 }
                 Ok(true)
             }
@@ -726,11 +772,13 @@ impl Command {
                     &app.sort,
                     &project_tasks,
                 )));
+                app.animation.start_dialog_open();
                 Ok(true)
             }
 
             Command::ShowSettings => {
                 app.dialog = Some(Dialog::Settings(SettingsDialog::new()));
+                app.animation.start_dialog_open();
                 Ok(true)
             }
 
@@ -801,6 +849,7 @@ impl Command {
                 // Return to main view if in search
                 if app.current_view == View::Search {
                     app.current_view = View::Main;
+                    app.animation.start_view_transition();
                     app.search_results.clear();
                     app.selected_search_index = 0;
                 }
@@ -977,7 +1026,7 @@ mod tests {
     #[tokio::test]
     async fn test_show_help() {
         let mut app = setup_app().await;
-        assert_eq!(app.current_view, View::Main);
+        app.current_view = View::Main;
 
         Command::ShowHelp.execute(&mut app).await.unwrap();
         assert_eq!(app.current_view, View::Help);
@@ -995,7 +1044,7 @@ mod tests {
     #[tokio::test]
     async fn test_toggle_debug_logs() {
         let mut app = setup_app().await;
-        assert_eq!(app.current_view, View::Main);
+        app.current_view = View::Main;
 
         Command::ShowDebugLogs.execute(&mut app).await.unwrap();
         assert_eq!(app.current_view, View::DebugLogs);
@@ -1187,5 +1236,61 @@ mod tests {
         // Refresh should load it
         Command::Refresh.execute(&mut app).await.unwrap();
         assert_eq!(app.tasks.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_opens_dialog() {
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+        assert!(app.dialog.is_none());
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        assert!(app.dialog.is_some());
+        assert!(matches!(app.dialog, Some(Dialog::QuickCapture(_))));
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_preselects_project() {
+        use crate::models::Project;
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+
+        // Create a project and select it in the sidebar
+        let project = Project::new("Backend");
+        app.db.insert_project(&project).await.unwrap();
+        app.projects = app.db.get_all_projects().await.unwrap();
+        // Index 0 = "All Tasks", index 1 = first project
+        app.selected_project_index = 1;
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        // Dialog should have the project pre-selected
+        if let Some(Dialog::QuickCapture(ref dialog)) = app.dialog {
+            assert!(dialog.project().is_some());
+            assert_eq!(dialog.project().unwrap().name, "Backend");
+        } else {
+            panic!("Expected QuickCapture dialog");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_quick_capture_no_project_when_all_tasks() {
+        use crate::ui::dialogs::Dialog;
+
+        let mut app = setup_app().await;
+        // "All Tasks" is selected (index 0)
+        app.selected_project_index = 0;
+
+        Command::QuickCapture.execute(&mut app).await.unwrap();
+
+        // Dialog should have no project pre-selected
+        if let Some(Dialog::QuickCapture(ref dialog)) = app.dialog {
+            assert!(dialog.project().is_none());
+        } else {
+            panic!("Expected QuickCapture dialog");
+        }
     }
 }

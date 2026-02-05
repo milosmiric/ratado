@@ -243,7 +243,7 @@ fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
             if app.focus == FocusPanel::Sidebar {
                 Some(Command::AddProject)
             } else {
-                Some(Command::AddTask)
+                Some(Command::QuickCapture)
             }
         }
         KeyCode::Char('e') | KeyCode::Enter => {
@@ -266,6 +266,9 @@ fn map_normal_mode_key(key: KeyEvent, app: &App) -> Option<Command> {
         KeyCode::Char('p') => Some(Command::CyclePriority),
         KeyCode::Char('t') => Some(Command::EditTags),
         KeyCode::Char('m') => Some(Command::MoveToProject),
+
+        // === Full Add Task form ===
+        KeyCode::Char('A') => Some(Command::AddTask),
 
         // === Views ===
         KeyCode::Char('?') => Some(Command::ShowHelp),
@@ -482,9 +485,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_task_a() {
+    async fn test_quick_capture_a() {
         let app = setup_app().await;
         let cmd = map_key_to_command(key(KeyCode::Char('a')), &app);
+        assert!(matches!(cmd, Some(Command::QuickCapture)));
+    }
+
+    #[tokio::test]
+    async fn test_add_task_shift_a() {
+        let app = setup_app().await;
+        let cmd = map_key_to_command(key(KeyCode::Char('A')), &app);
         assert!(matches!(cmd, Some(Command::AddTask)));
     }
 
