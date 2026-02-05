@@ -2,8 +2,13 @@
 
 A fast, keyboard-driven terminal task manager built with Rust and [Ratatui](https://ratatui.rs/).
 
+![Version](https://img.shields.io/github/v/release/milosmiric/ratado)
+![Crates.io](https://img.shields.io/crates/v/ratado)
+![Homebrew](https://img.shields.io/badge/homebrew-milosmiric%2Ftap-orange)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)
+
+![Ratado task list](docs/screenshot_tasks.png)
 
 ## Features
 
@@ -138,36 +143,24 @@ Data is stored at `~/Library/Application Support/ratado/ratado.db` (macOS) or `~
 
 ## Screenshots
 
-### Main View
+### Splash Screen
 
-```
-Ratado v0.2.0   [Overdue: 2] [Due Today: 3]  12 tasks total
-──────────────────────────────────────────────────────────────────────
-PROJECTS          │ TASKS  [Pending]  [Due Date ↑]
-                  │
-▸ All Tasks (12)  │ ▶ [ ] !! Fix production bug                  Yesterday
-  Inbox (2)       │   [ ] !! Review pull request #42             Yesterday
-  Work (6)        │   [ ]  ! Deploy v2.0 release                     Today
-  Personal (4)    │   [ ]    Update API documentation                Today
-                  │   [ ]    Team standup meeting                    Today
-                  │   [ ]    Write unit tests              @Work  #backend
-                  │   [ ]    Refactor auth module          @Work  #backend
-                  │   [ ]  ↓ Clean up old branches                  Friday
-                  │   [ ]    Buy groceries                @Personal #home
-                  │   [ ]    Schedule dentist appointment       @Personal
-                  │   [ ]    Read "Clean Code" chapter 5  @Personal #books
-                  │   [ ]  ↓ Organize desk                  @Inbox  #home
-                  │
-──────────────────────────────────────────────────────────────────────
-a Capture  A Add  e Edit  d Del  Space Done  / Search  c Calendar  f Filter  ? Help
-```
+![Ratado splash screen](docs/screenshot_splash.png)
+
+### Task List
+
+![Ratado task list with projects, priorities, tags, and due dates](docs/screenshot_tasks.png)
+
+### Calendar View
+
+![Ratado weekly calendar view](docs/screenshot_calendar.png)
 
 ## Quick Capture
 
 Press `a` to open the Quick Capture spotlight. Type a single line with inline tokens to rapidly create tasks:
 
 ```
-Buy groceries @Personal #shopping !3 due:friday
+Fix auth bug @Platform #p0 !1 due:tomorrow
 ```
 
 | Token | Meaning | Example |
